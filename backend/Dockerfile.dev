@@ -1,24 +1,41 @@
-FROM golang:1.24.0-alpine
+FROM golang:1.23.4-alpine
 
-WORKDIR /app
+# Install build tools
+RUN apk add --no-cache gcc musl-dev
+
+# Set working directory
+WORKDIR /go/src/bytecast
 
 # Install Air for hot reload
-RUN go install github.com/cosmtrek/air@latest
+RUN go install github.com/cosmtrek/air@v1.49.0
 
-# Copy go mod files
-COPY go.mod go.sum ./
+# Copy the entire backend directory
+COPY . .
 
 # Download dependencies
 RUN go mod download
 
-# Copy the rest of the code
-COPY . .
+# Create tmp directory for air
+RUN mkdir -p tmp
 
 # Create .air.toml configuration
-RUN echo '[build]\n  cmd = "go build -o ./tmp/main ./cmd/server"\n  bin = "./tmp/main"\n  include_ext = ["go", "mod"]\n  exclude_dir = ["tmp", "vendor"]\n  delay = 1000\n  kill_delay = "0.5s"\n  send_interrupt = true\n  stop_on_error = true\n\n[color]\n  build = "yellow"\n  main = "magenta"\n  runner = "green"\n  watcher = "cyan"' > .air.toml
+RUN echo '[build]' > .air.toml && \
+    echo 'cmd = "go build -o ./tmp/main ./cmd/server/main.go"' >> .air.toml && \
+    echo 'bin = "./tmp/main"' >> .air.toml && \
+    echo 'include_ext = ["go", "mod"]' >> .air.toml && \
+    echo 'exclude_dir = ["tmp", "vendor"]' >> .air.toml && \
+    echo 'delay = 1000' >> .air.toml && \
+    echo 'kill_delay = "0.5s"' >> .air.toml && \
+    echo 'send_interrupt = true' >> .air.toml && \
+    echo 'stop_on_error = true' >> .air.toml && \
+    echo '[color]' >> .air.toml && \
+    echo 'build = "yellow"' >> .air.toml && \
+    echo 'main = "magenta"' >> .air.toml && \
+    echo 'runner = "green"' >> .air.toml && \
+    echo 'watcher = "cyan"' >> .air.toml
 
 # Expose default port
 EXPOSE 8080
 
 # Using Air for hot reload in development
-ENTRYPOINT ["air"]
+CMD ["air", "-c", ".air.toml"]

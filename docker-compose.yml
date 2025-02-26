@@ -19,8 +19,6 @@ services:
       dockerfile: Dockerfile.dev
     ports:
       - "8080:8080"
-    volumes:
-      - ./backend:/app
     environment:
       - GIN_MODE=debug
       - DB_HOST=${POSTGRES_HOST}
