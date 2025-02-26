@@ -1,0 +1,26 @@
+# Environment variables
+.env
+
+# Dependencies
+node_modules/
+vendor/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build output
+dist/
+build/
+tmp/
+
+# Logs
+*.log
+
+# Docker volumes
+postgres_data/
+
+# Angular specific
+.angular/
