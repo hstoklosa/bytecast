@@ -10,7 +10,8 @@
   },
   "private": true,
   "dependencies": {
-    "@angular/animations": "^19.1.0",
+    "@angular/animations": "^19.1.7",
+    "@angular/cdk": "^19.1.5",
     "@angular/common": "^19.1.0",
     "@angular/compiler": "^19.1.0",
     "@angular/core": "^19.1.0",
@@ -19,6 +20,8 @@
     "@angular/platform-browser-dynamic": "^19.1.0",
     "@angular/router": "^19.1.0",
     "@spartan-ng/cli": "^0.0.1-alpha.410",
+    "@spartan-ng/ui-button-helm": "^0.0.1-alpha.357",
+    "@spartan-ng/ui-core": "^0.0.1-alpha.380",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.15.0"
