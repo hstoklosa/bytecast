@@ -1,0 +1,24 @@
+FROM golang:1.24.0-alpine
+
+WORKDIR /app
+
+# Install Air for hot reload
+RUN go install github.com/cosmtrek/air@latest
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy the rest of the code
+COPY . .
+
+# Create .air.toml configuration
+RUN echo '[build]\n  cmd = "go build -o ./tmp/main ./cmd/server"\n  bin = "./tmp/main"\n  include_ext = ["go", "mod"]\n  exclude_dir = ["tmp", "vendor"]\n  delay = 1000\n  kill_delay = "0.5s"\n  send_interrupt = true\n  stop_on_error = true\n\n[color]\n  build = "yellow"\n  main = "magenta"\n  runner = "green"\n  watcher = "cyan"' > .air.toml
+
+# Expose default port
+EXPOSE 8080
+
+# Using Air for hot reload in development
+ENTRYPOINT ["air"]
