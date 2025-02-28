@@ -1,13 +1,12 @@
 package config
 
 import (
-	"fmt"
-	"log"
-	"os"
-	"path/filepath"
-
-	"github.com/go-playground/validator/v10"
-	"github.com/joho/godotenv"
+    "fmt"
+    "log"
+    "os"
+    
+    "github.com/go-playground/validator/v10"
+    "github.com/joho/godotenv"
 )
 
 // Config holds all configuration for the application
@@ -35,9 +34,9 @@ type Server struct {
 
 // Load returns a validated configuration struct
 func Load() (*Config, error) {
-    // Load .env file from the project root
-    if err := godotenv.Load(filepath.Join("..", ".env")); err != nil {
-        log.Printf("Warning: .env file not found, using environment variables")
+    // Load .env file from project root (where backend folder resides)
+    if err := godotenv.Load("../../.env"); err != nil {
+        log.Printf("Note: .env file not found, using environment variables")
     }
 
     // Map environment variables to match docker-compose naming
@@ -57,12 +56,18 @@ func Load() (*Config, error) {
         },
     }
 
-    // Print config for debugging (remove in production)
-    log.Printf("Config loaded - JWT Secret length: %d", len(cfg.JWT.Secret))
+    // Check JWT secret before validation
+    if cfg.JWT.Secret == "" {
+        log.Printf("Warning: JWT_SECRET not set")
+    }
 
+    // Validate entire configuration
     if err := validateConfig(cfg); err != nil {
         return nil, fmt.Errorf("config validation error: %w", err)
     }
+
+    // Log successful configuration (but don't expose the secret)
+    log.Printf("Configuration loaded successfully")
 
     return cfg, nil
 }
