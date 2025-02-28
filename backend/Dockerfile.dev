@@ -1,24 +1,17 @@
 FROM golang:1.23.4-alpine
 
-# Install build tools
 RUN apk add --no-cache gcc musl-dev
 
-# Set working directory
 WORKDIR /go/src/bytecast
 
-# Install Air for hot reload
 RUN go install github.com/cosmtrek/air@v1.49.0
 
-# Copy the entire backend directory
 COPY . .
 
-# Download dependencies
 RUN go mod download
 
-# Create tmp directory for air
 RUN mkdir -p tmp
 
-# Create .air.toml configuration
 RUN echo '[build]' > .air.toml && \
     echo 'cmd = "go build -o ./tmp/main ./cmd/server/main.go"' >> .air.toml && \
     echo 'bin = "./tmp/main"' >> .air.toml && \
@@ -34,8 +27,6 @@ RUN echo '[build]' > .air.toml && \
     echo 'runner = "green"' >> .air.toml && \
     echo 'watcher = "cyan"' >> .air.toml
 
-# Expose default port
 EXPOSE 8080
 
-# Using Air for hot reload in development
 CMD ["air", "-c", ".air.toml"]
