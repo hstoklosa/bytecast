@@ -7,8 +7,8 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-"bytecast/configs"
-"bytecast/internal/app/models"
+	"bytecast/configs"
+	"bytecast/internal/models"
 )
 
 // Connection holds the database connection and configuration

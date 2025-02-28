@@ -15,7 +15,7 @@ import (
 	"bytecast/api/handler"
 	"bytecast/api/middleware"
 	"bytecast/configs"
-	"bytecast/internal/app/services"
+	"bytecast/internal/services"
 	"bytecast/internal/database"
 )
 

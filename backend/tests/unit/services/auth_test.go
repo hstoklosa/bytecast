@@ -1,4 +1,4 @@
-package services
+package services_test
 
 import (
 	"testing"
@@ -8,7 +8,8 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"bytecast/internal/app/models"
+	"bytecast/internal/models"
+	"bytecast/internal/services"
 )
 
 func setupTestDB(t *testing.T) *gorm.DB {
@@ -32,7 +33,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 
 func TestAuthService_RegisterUser(t *testing.T) {
 	db := setupTestDB(t)
-	authService := NewAuthService(db, "test-secret")
+	authService := services.NewAuthService(db, "test-secret")
 
 	tests := []struct {
 		name     string
@@ -66,7 +67,7 @@ func TestAuthService_RegisterUser(t *testing.T) {
 
 func TestAuthService_LoginUser(t *testing.T) {
 	db := setupTestDB(t)
-	authService := NewAuthService(db, "test-secret")
+	authService := services.NewAuthService(db, "test-secret")
 
 	// Register a test user
 	email := "test@example.com"
@@ -150,7 +151,7 @@ func TestAuthService_LoginUser(t *testing.T) {
 
 func TestAuthService_RefreshTokens(t *testing.T) {
 	db := setupTestDB(t)
-	authService := NewAuthService(db, "test-secret")
+	authService := services.NewAuthService(db, "test-secret")
 
 	// Register and login a test user
 	email := "test@example.com"

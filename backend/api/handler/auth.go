@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"bytecast/internal/app/services"
+	"bytecast/internal/services"
 )
 
 type authRequest struct {
