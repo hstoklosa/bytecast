@@ -1,34 +1,34 @@
 <div class="min-h-screen bg-gradient-to-b from-gray-50 to-white md:h-screen md:overflow-hidden">
-  <div class="container mx-auto px-4 py-8 md:py-0">
-    <div class="md:min-h-screen md:grid md:grid-cols-2 md:gap-12 md:items-center">
+  <div class="container mx-auto px-4 py-8 md:py-0 max-w-6xl">
+    <div class="md:min-h-screen md:grid md:grid-cols-2 md:gap-8 md:items-center">
       <!-- Left Column: Hero Section -->
-      <div class="text-center md:text-left mb-12 md:mb-0">
-        <h1 class="text-4xl md:text-6xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-6">
+      <div class="text-center md:text-left mb-12 md:mb-0 md:pr-8">
+        <h1 class="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-6">
           ByteCast
         </h1>
-        <p class="text-xl md:text-2xl text-gray-600 mb-8 max-w-2xl md:max-w-none">
+        <p class="text-xl text-gray-600 mb-8 max-w-xl">
           Transform your favorite YouTube channels into personalized podcast summaries
         </p>
-        <button hlmBtn variant="default" size="lg" class="px-8 py-3 text-lg" (click)="navigateToSignup()">
+        <button hlmBtn variant="default" size="lg" class="px-6 py-2.5 text-base" (click)="navigateToSignup()">
           Create Your Watchlist
         </button>
       </div>
 
       <!-- Right Column: Features -->
-      <div class="space-y-6">
+      <div class="space-y-4">
         <div *ngFor="let feature of features" 
-             class="feature-card bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+             class="feature-card bg-white p-5 rounded-lg shadow-sm hover:shadow-md transition-shadow">
           <div class="flex items-start space-x-4">
             <div class="flex-none">
-              <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" [attr.d]="feature.icon" />
                 </svg>
               </div>
             </div>
             <div class="flex-1 min-w-0">
-              <h3 class="text-xl font-semibold mb-2">{{feature.title}}</h3>
-              <p class="text-gray-600">{{feature.description}}</p>
+              <h3 class="text-lg font-semibold mb-1">{{feature.title}}</h3>
+              <p class="text-sm text-gray-600 leading-relaxed">{{feature.description}}</p>
             </div>
           </div>
         </div>
