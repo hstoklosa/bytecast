@@ -12,23 +12,23 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"bytecast/internal/config"
+	"bytecast/api/handler"
+	"bytecast/api/middleware"
+	"bytecast/configs"
+	"bytecast/internal/app/services"
 	"bytecast/internal/database"
-	"bytecast/internal/middleware"
-	"bytecast/internal/routes"
-	"bytecast/internal/services"
 )
 
 // Server represents the HTTP server and its dependencies
 type Server struct {
     router  *gin.Engine
     db      *database.Connection
-    cfg     *config.Config
+    cfg     *configs.Config
     server  *http.Server
 }
 
 // New creates a new server instance
-func New(cfg *config.Config, db *database.Connection) *Server {
+func New(cfg *configs.Config, db *database.Connection) *Server {
     router := gin.Default()
 
     return &Server{
@@ -47,7 +47,7 @@ func (s *Server) Start() error {
     authService := services.NewAuthService(db, s.cfg.JWT.Secret)
 
     // Initialize route handlers
-    authHandler := routes.NewAuthHandler(authService)
+    authHandler := handler.NewAuthHandler(authService)
 
     // Register routes
     authHandler.RegisterRoutes(s.router)

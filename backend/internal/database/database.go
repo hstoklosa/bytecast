@@ -7,18 +7,18 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"bytecast/internal/config"
-	"bytecast/internal/models"
+"bytecast/configs"
+"bytecast/internal/app/models"
 )
 
 // Connection holds the database connection and configuration
 type Connection struct {
 	db     *gorm.DB
-	config *config.Database
+	config *configs.Database
 }
 
 // New creates a new database connection with proper connection pooling
-func New(cfg *config.Database) (*Connection, error) {
+func New(cfg *configs.Database) (*Connection, error) {
 	db, err := gorm.Open(postgres.Open(cfg.GetDSN()), &gorm.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)

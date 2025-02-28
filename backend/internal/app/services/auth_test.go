@@ -8,7 +8,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"bytecast/internal/models"
+	"bytecast/internal/app/models"
 )
 
 func setupTestDB(t *testing.T) *gorm.DB {

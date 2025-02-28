@@ -3,14 +3,14 @@ package main
 import (
     "log"
 
-    "bytecast/internal/config"
+    "bytecast/configs"
     "bytecast/internal/database"
     "bytecast/internal/server"
 )
 
 func main() {
     // Load configuration
-    cfg, err := config.Load()
+    cfg, err := configs.Load()
     if err != nil {
         log.Fatal("Failed to load configuration:", err)
     }

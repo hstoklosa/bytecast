@@ -1,4 +1,4 @@
-package config
+package configs
 
 import (
     "fmt"
@@ -35,7 +35,7 @@ type Server struct {
 // Load returns a validated configuration struct
 func Load() (*Config, error) {
     // Load .env file from project root (where backend folder resides)
-    if err := godotenv.Load("../../.env"); err != nil {
+    if err := godotenv.Load("../../../.env"); err != nil {
         log.Printf("Note: .env file not found, using environment variables")
     }
 

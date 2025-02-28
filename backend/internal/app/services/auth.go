@@ -8,7 +8,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"bytecast/internal/models"
+	"bytecast/internal/app/models"
 )
 
 var (

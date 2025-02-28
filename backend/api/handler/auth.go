@@ -1,11 +1,11 @@
-package routes
+package handler
 
 import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
-	"bytecast/internal/services"
+	"bytecast/internal/app/services"
 )
 
 type authRequest struct {
@@ -18,7 +18,7 @@ type refreshRequest struct {
 }
 
 type AuthHandler struct {
-	authService *services.AuthService
+authService *services.AuthService
 }
 
 func NewAuthHandler(authService *services.AuthService) *AuthHandler {
