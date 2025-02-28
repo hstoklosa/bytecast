@@ -5,8 +5,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies with legacy peer deps to handle @spartan-ng conflicts
-RUN npm install --legacy-peer-deps
+# Install dependencies with force flag to resolve the package conflicts
+RUN npm install --force
 
 # Copy the rest of the frontend code
 COPY . .
