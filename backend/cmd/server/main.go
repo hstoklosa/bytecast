@@ -9,6 +9,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	"bytecast/internal/middleware"
 	"bytecast/internal/models"
 	"bytecast/internal/routes"
 	"bytecast/internal/services"
@@ -81,6 +82,17 @@ func main() {
 
 	// Register routes
 	authHandler.RegisterRoutes(r)
+
+	// Protected routes group
+	protected := r.Group("/api")
+	protected.Use(middleware.AuthMiddleware([]byte(jwtSecret)))
+	{
+		// Add protected routes here
+		protected.GET("/me", func(c *gin.Context) {
+			userID, _ := c.Get("user_id")
+			c.JSON(200, gin.H{"user_id": userID})
+		})
+	}
 
 	// Health check route
 	r.GET("/health", func(c *gin.Context) {
