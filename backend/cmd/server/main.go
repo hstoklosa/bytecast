@@ -8,6 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"bytecast/internal/models"
+	"bytecast/internal/routes"
+	"bytecast/internal/services"
 )
 
 func getDatabaseURL() string {
@@ -38,6 +42,16 @@ func getDatabaseURL() string {
 	)
 }
 
+func getJWTSecret() string {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		// In production, you should ensure JWT_SECRET is set
+		// For development, we'll use a default secret
+		secret = "your-256-bit-secret" // Minimum 32 characters for HS256
+	}
+	return secret
+}
+
 func main() {
 	// Initialize Gin
 	r := gin.Default()
@@ -51,13 +65,24 @@ func main() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	// Store db in gin context
-	r.Use(func(c *gin.Context) {
-		c.Set("db", db)
-		c.Next()
-	})
+	// Run migrations
+	if err := db.AutoMigrate(&models.User{}); err != nil {
+		log.Fatal("Failed to run migrations:", err)
+	}
 
-	// Routes
+	// Initialize JWT secret
+	jwtSecret := getJWTSecret()
+
+	// Initialize services
+	authService := services.NewAuthService(db, jwtSecret)
+
+	// Initialize route handlers
+	authHandler := routes.NewAuthHandler(authService)
+
+	// Register routes
+	authHandler.RegisterRoutes(r)
+
+	// Health check route
 	r.GET("/health", func(c *gin.Context) {
 		sqlDB, err := db.DB()
 		if err != nil {
