@@ -1,10 +1,40 @@
-<div class="container mx-auto p-4">
-  <h1 class="text-2xl mb-4">ByteCast</h1>
+<div class="min-h-screen bg-gradient-to-b from-gray-50 to-white md:h-screen md:overflow-hidden">
+  <div class="container mx-auto px-4 py-8 md:py-0">
+    <div class="md:min-h-screen md:grid md:grid-cols-2 md:gap-12 md:items-center">
+      <!-- Left Column: Hero Section -->
+      <div class="text-center md:text-left mb-12 md:mb-0">
+        <h1 class="text-4xl md:text-6xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-6">
+          ByteCast
+        </h1>
+        <p class="text-xl md:text-2xl text-gray-600 mb-8 max-w-2xl md:max-w-none">
+          Transform your favorite YouTube channels into personalized podcast summaries
+        </p>
+        <button hlmBtn variant="default" size="lg" class="px-8 py-3 text-lg" (click)="navigateToSignup()">
+          Create Your Watchlist
+        </button>
+      </div>
 
-  <div class="flex flex-col gap-4">
-    <button hlmBtn>Spartan UI Button</button>
-    <div class="mt-4">
-      <router-outlet></router-outlet>
+      <!-- Right Column: Features -->
+      <div class="space-y-6">
+        <div *ngFor="let feature of features" 
+             class="feature-card bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+          <div class="flex items-start space-x-4">
+            <div class="flex-none">
+              <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" [attr.d]="feature.icon" />
+                </svg>
+              </div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <h3 class="text-xl font-semibold mb-2">{{feature.title}}</h3>
+              <p class="text-gray-600">{{feature.description}}</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+
+  <router-outlet></router-outlet>
 </div>
