@@ -1,20 +1,23 @@
 package services
 
 import (
-	"errors"
-	"time"
+    "crypto/sha256"
+    "encoding/hex"
+    "errors"
+    "time"
 
-	"github.com/golang-jwt/jwt"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
+    "github.com/golang-jwt/jwt"
+    "golang.org/x/crypto/bcrypt"
+    "gorm.io/gorm"
 
-	"bytecast/internal/models"
+    "bytecast/internal/models"
 )
 
 var (
-	ErrInvalidCredentials = errors.New("invalid email or password")
-	ErrUserExists        = errors.New("user already exists")
-	ErrTokenInvalid     = errors.New("invalid token")
+    ErrInvalidCredentials = errors.New("invalid email or password")
+    ErrUserExists        = errors.New("user already exists")
+    ErrTokenInvalid      = errors.New("invalid token")
+    ErrTokenRevoked      = errors.New("token has been revoked")
 )
 
 type TokenPair struct {
@@ -76,28 +79,93 @@ func (s *AuthService) LoginUser(email, password string) (*TokenPair, error) {
 }
 
 func (s *AuthService) RefreshTokens(refreshToken string) (*TokenPair, error) {
-	token, err := jwt.Parse(refreshToken, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, ErrTokenInvalid
-		}
-		return s.jwtSecret, nil
-	})
+    token, err := jwt.Parse(refreshToken, func(token *jwt.Token) (interface{}, error) {
+        if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+            return nil, ErrTokenInvalid
+        }
+        return s.jwtSecret, nil
+    })
 
-	if err != nil || !token.Valid {
-		return nil, ErrTokenInvalid
-	}
+    if err != nil || !token.Valid {
+        return nil, ErrTokenInvalid
+    }
 
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return nil, ErrTokenInvalid
-	}
+    claims, ok := token.Claims.(jwt.MapClaims)
+    if !ok {
+        return nil, ErrTokenInvalid
+    }
 
-	userID, ok := claims["user_id"].(float64)
-	if !ok {
-		return nil, ErrTokenInvalid
-	}
+    // Check if token is revoked
+    isRevoked, err := s.IsTokenRevoked(refreshToken)
+    if err != nil {
+        return nil, err
+    }
+    if isRevoked {
+        return nil, ErrTokenRevoked
+    }
 
-	return s.generateTokenPair(uint(userID))
+    userID, ok := claims["user_id"].(float64)
+    if !ok {
+        return nil, ErrTokenInvalid
+    }
+
+    return s.generateTokenPair(uint(userID))
+}
+
+func (s *AuthService) RevokeToken(token string) error {
+    parsedToken, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+        if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+            return nil, ErrTokenInvalid
+        }
+        return s.jwtSecret, nil
+    })
+
+    if err != nil || !parsedToken.Valid {
+        return ErrTokenInvalid
+    }
+
+    claims, ok := parsedToken.Claims.(jwt.MapClaims)
+    if !ok {
+        return ErrTokenInvalid
+    }
+
+    userID, ok := claims["user_id"].(float64)
+    if !ok {
+        return ErrTokenInvalid
+    }
+
+    exp, ok := claims["exp"].(float64)
+    if !ok {
+        return ErrTokenInvalid
+    }
+
+    revokedToken := models.RevokedToken{
+        TokenHash: s.hashToken(token),
+        ExpiresAt: time.Unix(int64(exp), 0),
+        UserID:    uint(userID),
+    }
+
+    return s.db.Create(&revokedToken).Error
+}
+
+func (s *AuthService) IsTokenRevoked(token string) (bool, error) {
+    var revokedToken models.RevokedToken
+    result := s.db.Where("token_hash = ?", s.hashToken(token)).First(&revokedToken)
+
+    if result.Error == nil {
+        return true, nil
+    }
+
+    if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+        return false, nil
+    }
+
+    return false, result.Error
+}
+
+func (s *AuthService) hashToken(token string) string {
+    hash := sha256.Sum256([]byte(token))
+    return hex.EncodeToString(hash[:])
 }
 
 func (s *AuthService) generateTokenPair(userID uint) (*TokenPair, error) {

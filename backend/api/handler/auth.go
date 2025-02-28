@@ -14,7 +14,11 @@ type authRequest struct {
 }
 
 type refreshRequest struct {
-	RefreshToken string `json:"refresh_token" binding:"required"`
+    RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+type logoutRequest struct {
+    RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
 type AuthHandler struct {
@@ -28,12 +32,13 @@ func NewAuthHandler(authService *services.AuthService) *AuthHandler {
 }
 
 func (h *AuthHandler) RegisterRoutes(r *gin.Engine) {
-	auth := r.Group("/auth")
-	{
-		auth.POST("/register", h.register)
-		auth.POST("/login", h.login)
-		auth.POST("/refresh", h.refresh)
-	}
+    auth := r.Group("/auth")
+    {
+        auth.POST("/register", h.register)
+        auth.POST("/login", h.login)
+        auth.POST("/refresh", h.refresh)
+        auth.POST("/logout", h.logout)
+    }
 }
 
 func (h *AuthHandler) register(c *gin.Context) {
@@ -73,6 +78,26 @@ func (h *AuthHandler) login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, tokens)
+}
+
+func (h *AuthHandler) logout(c *gin.Context) {
+    var req logoutRequest
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+
+    if err := h.authService.RevokeToken(req.RefreshToken); err != nil {
+        switch err {
+        case services.ErrTokenInvalid:
+            c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+        default:
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to logout"})
+        }
+        return
+    }
+
+    c.Status(http.StatusNoContent)
 }
 
 func (h *AuthHandler) refresh(c *gin.Context) {
