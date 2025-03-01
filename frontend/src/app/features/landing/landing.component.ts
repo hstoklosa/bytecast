@@ -1,92 +1,51 @@
-import { Component } from "@angular/core";
+import { Component, OnDestroy, OnInit } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { HlmButtonDirective } from "@spartan-ng/ui-button-helm";
 import { Router } from "@angular/router";
-
-interface Feature {
-  title: string;
-  description: string;
-  icon: string;
-}
+import { Feature } from "./landing.interface";
+import { LucideAngularModule, MoveRight, Info } from "lucide-angular";
+import {
+  animate,
+  keyframes,
+  style,
+  transition,
+  trigger,
+} from "@angular/animations";
 
 @Component({
   selector: "app-landing",
   standalone: true,
-  imports: [CommonModule, HlmButtonDirective],
-  template: `
-    <div
-      class="min-h-screen bg-gradient-to-b from-background to-card md:h-screen md:overflow-hidden"
-    >
-      <div class="container mx-auto px-4 py-8 md:py-0 max-w-6xl">
-        <div
-          class="md:min-h-screen md:grid md:grid-cols-2 md:gap-8 md:items-center"
-        >
-          <!-- Left Column: Hero Section -->
-          <div class="text-center md:text-left mb-12 md:mb-0 md:pr-8">
-            <h1
-              class="text-4xl md:text-5xl font-bold text-primary mb-6"
-            >
-              ByteCast
-            </h1>
-            <p class="text-xl text-muted-foreground mb-8 max-w-xl">
-              Transform your favorite YouTube channels into personalized podcast
-              summaries
-            </p>
-            <button
-              hlmBtn
-              variant="default"
-              size="lg"
-              class="px-6 py-2.5 text-base"
-              (click)="navigateToSignup()"
-            >
-              Create Your Watchlist
-            </button>
-          </div>
-
-          <!-- Right Column: Features -->
-          <div class="space-y-4">
-            <div
-              *ngFor="let feature of features"
-              class="feature-card bg-card p-5 rounded-lg shadow-sm hover:shadow-md transition-shadow border"
-            >
-              <div class="flex items-start space-x-4">
-                <div class="flex-none">
-                  <div
-                    class="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center"
-                  >
-                    <svg
-                      class="w-5 h-5 text-primary"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        [attr.d]="feature.icon"
-                      />
-                    </svg>
-                  </div>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <h3 class="text-lg font-semibold text-primary mb-1">
-                    {{ feature.title }}
-                  </h3>
-                  <p class="text-sm text-muted-foreground leading-relaxed">
-                    {{ feature.description }}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `,
+  imports: [CommonModule, HlmButtonDirective, LucideAngularModule],
+  animations: [
+    trigger("titleAnimation", [
+      transition(":enter, * => *", [
+        animate(
+          "400ms cubic-bezier(0.4, 0, 0.2, 1)",
+          keyframes([
+            style({ opacity: 0, transform: "translateY(100%)", offset: 0 }),
+            style({ opacity: 1, transform: "translateY(0)", offset: 1 }),
+          ])
+        ),
+      ]),
+    ]),
+  ],
+  templateUrl: "./landing.component.html",
+  styleUrls: ["./landing.component.css"],
 })
-export class LandingComponent {
-  readonly features: Feature[] = [
+export class LandingComponent implements OnInit, OnDestroy {
+  readonly moveRightIcon = MoveRight;
+  readonly infoIcon = Info;
+  private intervalId?: number;
+  titleNumber = 0;
+  readonly titles = [
+    "automated",
+    "personalized",
+    "summarized",
+    "simplified",
+    "organized",
+  ];
+  // Commenting out features for now
+  private readonly features: Feature[] = [
     {
       title: "Curated Watchlists",
       description:
@@ -108,6 +67,22 @@ export class LandingComponent {
   ];
 
   constructor(private router: Router) {}
+
+  ngOnInit(): void {
+    this.startTitleAnimation();
+  }
+
+  ngOnDestroy(): void {
+    if (this.intervalId) {
+      window.clearInterval(this.intervalId);
+    }
+  }
+
+  private startTitleAnimation(): void {
+    this.intervalId = window.setInterval(() => {
+      this.titleNumber = (this.titleNumber + 1) % this.titles.length;
+    }, 2000);
+  }
 
   navigateToSignup(): void {
     this.router.navigate(["/sign-up"]);
