@@ -5,6 +5,7 @@ import {
   FormGroup,
   FormBuilder,
   Validators,
+  AbstractControl,
 } from "@angular/forms";
 import { RouterLink } from "@angular/router";
 import { HlmButtonDirective } from "@spartan-ng/ui-button-helm";
@@ -97,6 +98,8 @@ import { HlmErrorDirective } from "@spartan-ng/ui-formfield-helm";
                   [class.border-destructive]="showError('username')"
                   placeholder="Enter username"
                   class="w-full"
+                  (focus)="setFieldFocus(true, 'username')"
+                  (blur)="setFieldFocus(false, 'username')"
                 />
                 <div
                   *ngIf="showError('username') && submitted"
@@ -127,6 +130,8 @@ import { HlmErrorDirective } from "@spartan-ng/ui-formfield-helm";
                   [class.border-destructive]="showError('email')"
                   placeholder="name@example.com"
                   class="w-full"
+                  (focus)="setFieldFocus(true, 'email')"
+                  (blur)="setFieldFocus(false, 'email')"
                 />
                 <div
                   *ngIf="showError('email') && submitted"
@@ -157,6 +162,8 @@ import { HlmErrorDirective } from "@spartan-ng/ui-formfield-helm";
                   [class.border-destructive]="showError('password')"
                   placeholder="Enter password"
                   class="w-full"
+                  (focus)="setFieldFocus(true, 'password')"
+                  (blur)="setFieldFocus(false, 'password')"
                 />
                 <div
                   *ngIf="showError('password') && submitted"
@@ -187,6 +194,8 @@ import { HlmErrorDirective } from "@spartan-ng/ui-formfield-helm";
                   [class.border-destructive]="showError('confirmPassword')"
                   placeholder="Confirm password"
                   class="w-full"
+                  (focus)="setFieldFocus(true, 'confirmPassword')"
+                  (blur)="setFieldFocus(false, 'confirmPassword')"
                 />
                 <div
                   *ngIf="showError('confirmPassword') && submitted"
@@ -317,6 +326,12 @@ import { HlmErrorDirective } from "@spartan-ng/ui-formfield-helm";
 export class SignUpComponent {
   signUpForm: FormGroup;
   submitted = false;
+  focusedFields: { [key: string]: boolean } = {
+    username: false,
+    email: false,
+    password: false,
+    confirmPassword: false,
+  };
 
   constructor(private fb: FormBuilder) {
     this.signUpForm = this.fb.group(
@@ -345,7 +360,19 @@ export class SignUpComponent {
 
   showError(fieldName: string): boolean {
     const field = this.signUpForm.get(fieldName);
-    return field ? field.invalid && (field.dirty || field.touched) : false;
+    return (
+      (field?.invalid && field?.touched && !this.focusedFields[fieldName]) || false
+    );
+  }
+
+  setFieldFocus(isFocused: boolean, fieldName: string): void {
+    this.focusedFields[fieldName] = isFocused;
+    if (isFocused) {
+      const field = this.signUpForm.get(fieldName);
+      if (field) {
+        field.markAsUntouched();
+      }
+    }
   }
 
   onSubmit() {
