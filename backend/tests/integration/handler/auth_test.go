@@ -13,6 +13,7 @@ import (
     "gorm.io/gorm"
 
     "bytecast/api/handler"
+    "bytecast/configs"
     "bytecast/internal/models"
     "bytecast/internal/services"
 )
@@ -24,29 +25,34 @@ type testServer struct {
 }
 
 func setupTestServer(t *testing.T) *testServer {
-    // Use test database
     dsn := "host=localhost user=postgres password=bytecast dbname=bytecast_test port=5433 sslmode=disable"
     db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
     if err != nil {
         t.Fatalf("Failed to connect to test database: %v", err)
     }
 
-    // Run migrations
-    // Drop existing tables if they exist
     db.Exec("DROP TABLE IF EXISTS revoked_tokens, users CASCADE")
 
-    // Run migrations
     if err := db.AutoMigrate(&models.User{}, &models.RevokedToken{}); err != nil {
         t.Fatalf("Failed to run migrations: %v", err)
     }
 
-    // Setup Gin
     gin.SetMode(gin.TestMode)
     engine := gin.New()
 
-    // Setup auth handler
-    authService := services.NewAuthService(db, "test-secret")
-    authHandler := handler.NewAuthHandler(authService)
+    cfg := &configs.Config{
+        Server: configs.Server{
+            Port:        "8080",
+            Environment: "development",
+            Domain:      "localhost",
+        },
+        JWT: configs.JWT{
+            Secret: "test-secret",
+        },
+    }
+
+    authService := services.NewAuthService(db, cfg.JWT.Secret)
+    authHandler := handler.NewAuthHandler(authService, cfg)
     authHandler.RegisterRoutes(engine)
 
     return &testServer{
@@ -56,12 +62,62 @@ func setupTestServer(t *testing.T) *testServer {
     }
 }
 
+func TestAuthHandler_Register(t *testing.T) {
+    server := setupTestServer(t)
+
+    tests := []struct {
+        name       string
+        input     map[string]string
+        wantStatus int
+    }{
+        {
+            name: "Valid registration",
+            input: map[string]string{
+                "email":    "test@example.com",
+                "username": "testuser",
+                "password": "password123",
+            },
+            wantStatus: http.StatusCreated,
+        },
+        {
+            name: "Duplicate email",
+            input: map[string]string{
+                "email":    "test@example.com",
+                "username": "testuser2",
+                "password": "password123",
+            },
+            wantStatus: http.StatusConflict,
+        },
+        {
+            name: "Duplicate username",
+            input: map[string]string{
+                "email":    "test2@example.com",
+                "username": "testuser",
+                "password": "password123",
+            },
+            wantStatus: http.StatusConflict,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            body, _ := json.Marshal(tt.input)
+            req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewBuffer(body))
+            req.Header.Set("Content-Type", "application/json")
+            w := httptest.NewRecorder()
+            server.engine.ServeHTTP(w, req)
+            assert.Equal(t, tt.wantStatus, w.Code)
+        })
+    }
+}
+
 func TestAuthHandler_Logout(t *testing.T) {
     server := setupTestServer(t)
 
     // Register and login a test user first
     registerData := map[string]string{
         "email":    "test@example.com",
+        "username": "testuser",
         "password": "password123",
     }
 
@@ -72,7 +128,7 @@ func TestAuthHandler_Logout(t *testing.T) {
     server.engine.ServeHTTP(w, req)
     assert.Equal(t, http.StatusCreated, w.Code)
 
-    // Login to get tokens
+    // Login to get tokens and cookie
     loginBody, _ := json.Marshal(registerData)
     req = httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewBuffer(loginBody))
     req.Header.Set("Content-Type", "application/json")
@@ -80,43 +136,44 @@ func TestAuthHandler_Logout(t *testing.T) {
     server.engine.ServeHTTP(w, req)
     assert.Equal(t, http.StatusOK, w.Code)
 
-    var loginResponse struct {
-        RefreshToken string `json:"refresh_token"`
+    // Get refresh token from cookie
+    cookies := w.Result().Cookies()
+    var refreshCookie *http.Cookie
+    for _, cookie := range cookies {
+        if cookie.Name == "refresh_token" {
+            refreshCookie = cookie
+            break
+        }
     }
-    err := json.Unmarshal(w.Body.Bytes(), &loginResponse)
-    assert.NoError(t, err)
+    assert.NotNil(t, refreshCookie, "Refresh token cookie not found")
 
     tests := []struct {
         name       string
-        token      string
+        cookie     *http.Cookie
         wantStatus int
     }{
         {
             name:       "Valid token logout",
-            token:      loginResponse.RefreshToken,
+            cookie:     refreshCookie,
             wantStatus: http.StatusNoContent,
         },
         {
             name:       "Invalid token logout",
-            token:      "invalid-token",
+            cookie:     &http.Cookie{Name: "refresh_token", Value: "invalid-token"},
             wantStatus: http.StatusUnauthorized,
         },
         {
             name:       "Already revoked token",
-            token:      loginResponse.RefreshToken,
+            cookie:     refreshCookie,
             wantStatus: http.StatusUnauthorized,
         },
     }
 
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
-            logoutData := map[string]string{
-                "refresh_token": tt.token,
-            }
-            logoutBody, _ := json.Marshal(logoutData)
-
-            req := httptest.NewRequest(http.MethodPost, "/auth/logout", bytes.NewBuffer(logoutBody))
+            req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
             req.Header.Set("Content-Type", "application/json")
+            req.AddCookie(tt.cookie)
             w := httptest.NewRecorder()
             server.engine.ServeHTTP(w, req)
 
@@ -131,6 +188,7 @@ func TestAuthHandler_RefreshWithRevokedToken(t *testing.T) {
     // Register and login a test user
     userData := map[string]string{
         "email":    "test@example.com",
+        "username": "testuser",
         "password": "password123",
     }
 
@@ -150,33 +208,45 @@ func TestAuthHandler_RefreshWithRevokedToken(t *testing.T) {
     server.engine.ServeHTTP(w, req)
     assert.Equal(t, http.StatusOK, w.Code)
 
-    var loginResponse struct {
-        RefreshToken string `json:"refresh_token"`
+    // Get refresh token from cookie
+    cookies := w.Result().Cookies()
+    var refreshCookie *http.Cookie
+    for _, cookie := range cookies {
+        if cookie.Name == "refresh_token" {
+            refreshCookie = cookie
+            break
+        }
     }
-    err := json.Unmarshal(w.Body.Bytes(), &loginResponse)
-    assert.NoError(t, err)
+    assert.NotNil(t, refreshCookie, "Refresh token cookie not found")
 
     // Logout to revoke the token
-    logoutData := map[string]string{
-        "refresh_token": loginResponse.RefreshToken,
-    }
-    logoutBody, _ := json.Marshal(logoutData)
-    req = httptest.NewRequest(http.MethodPost, "/auth/logout", bytes.NewBuffer(logoutBody))
+    req = httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
     req.Header.Set("Content-Type", "application/json")
+    req.AddCookie(refreshCookie)
     w = httptest.NewRecorder()
     server.engine.ServeHTTP(w, req)
     assert.Equal(t, http.StatusNoContent, w.Code)
 
     // Attempt to refresh with revoked token
-    refreshData := map[string]string{
-        "refresh_token": loginResponse.RefreshToken,
-    }
-    refreshBody, _ := json.Marshal(refreshData)
-    req = httptest.NewRequest(http.MethodPost, "/auth/refresh", bytes.NewBuffer(refreshBody))
+    req = httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
     req.Header.Set("Content-Type", "application/json")
+    req.AddCookie(refreshCookie)
     w = httptest.NewRecorder()
     server.engine.ServeHTTP(w, req)
 
     // Should fail with unauthorized
     assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+    // Verify proper cookie clearing
+    cookies = w.Result().Cookies()
+    var clearedCookie *http.Cookie
+    for _, cookie := range cookies {
+        if cookie.Name == "refresh_token" {
+            clearedCookie = cookie
+            break
+        }
+    }
+    assert.NotNil(t, clearedCookie, "Cookie clearing not found")
+    assert.Equal(t, "", clearedCookie.Value, "Cookie not properly cleared")
+    assert.True(t, clearedCookie.MaxAge < 0, "Cookie expiration not properly set")
 }
