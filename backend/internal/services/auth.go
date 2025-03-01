@@ -1,21 +1,22 @@
 package services
 
 import (
-    "crypto/sha256"
-    "encoding/hex"
-    "errors"
-    "time"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"time"
 
-    "github.com/golang-jwt/jwt"
-    "golang.org/x/crypto/bcrypt"
-    "gorm.io/gorm"
+	"github.com/golang-jwt/jwt"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 
-    "bytecast/internal/models"
+	"bytecast/internal/models"
 )
 
 var (
     ErrInvalidCredentials = errors.New("invalid email or password")
     ErrUserExists        = errors.New("user already exists")
+    ErrUsernameTaken     = errors.New("username already taken")
     ErrTokenInvalid      = errors.New("invalid token")
     ErrTokenRevoked      = errors.New("token has been revoked")
 )
@@ -41,25 +42,34 @@ func NewAuthService(db *gorm.DB, jwtSecret string) *AuthService {
 	}
 }
 
-func (s *AuthService) RegisterUser(email, password string) error {
-	var existingUser models.User
-	if err := s.db.Where("email = ?", email).First(&existingUser).Error; err == nil {
-		return ErrUserExists
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
-	}
+func (s *AuthService) RegisterUser(email, username, password string) error {
+    // Check if email exists
+    var existingUser models.User
+    if err := s.db.Where("email = ?", email).First(&existingUser).Error; err == nil {
+        return ErrUserExists
+    } else if !errors.Is(err, gorm.ErrRecordNotFound) {
+        return err
+    }
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
+    // Check if username exists
+    if err := s.db.Where("username = ?", username).First(&existingUser).Error; err == nil {
+        return ErrUsernameTaken
+    } else if !errors.Is(err, gorm.ErrRecordNotFound) {
+        return err
+    }
 
-	user := models.User{
-		Email:        email,
-		PasswordHash: string(hashedPassword),
-	}
+    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+    if err != nil {
+        return err
+    }
 
-	return s.db.Create(&user).Error
+    user := models.User{
+        Email:        email,
+        Username:     username,
+        PasswordHash: string(hashedPassword),
+    }
+
+    return s.db.Create(&user).Error
 }
 
 func (s *AuthService) LoginUser(email, password string) (*TokenPair, error) {

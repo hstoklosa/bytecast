@@ -8,9 +8,15 @@ import (
 	"bytecast/internal/services"
 )
 
-type authRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
+type registerRequest struct {
+Email    string `json:"email" binding:"required,email"`
+Username string `json:"username" binding:"required,min=3,max=24,alphanum"`
+Password string `json:"password" binding:"required,min=6"`
+}
+
+type loginRequest struct {
+Email    string `json:"email" binding:"required,email"`
+Password string `json:"password" binding:"required,min=6"`
 }
 
 type refreshRequest struct {
@@ -42,26 +48,31 @@ func (h *AuthHandler) RegisterRoutes(r *gin.Engine) {
 }
 
 func (h *AuthHandler) register(c *gin.Context) {
-	var req authRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+var req registerRequest
+if err := c.ShouldBindJSON(&req); err != nil {
+c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+return
+}
 
-	if err := h.authService.RegisterUser(req.Email, req.Password); err != nil {
-		if err == services.ErrUserExists {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register user"})
-		return
-	}
+if err := h.authService.RegisterUser(req.Email, req.Username, req.Password); err != nil {
+switch err {
+case services.ErrUserExists:
+c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
+return
+case services.ErrUsernameTaken:
+c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
+return
+default:
+c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register user"})
+return
+}
+}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "user registered successfully"})
+c.JSON(http.StatusCreated, gin.H{"message": "user registered successfully"})
 }
 
 func (h *AuthHandler) login(c *gin.Context) {
-	var req authRequest
+var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
