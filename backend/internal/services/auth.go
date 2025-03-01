@@ -72,23 +72,23 @@ func (s *AuthService) RegisterUser(email, username, password string) error {
     return s.db.Create(&user).Error
 }
 
-func (s *AuthService) LoginUser(email, password string) (*TokenPair, error) {
-	var user models.User
-	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrInvalidCredentials
-		}
-		return nil, err
-	}
+func (s *AuthService) LoginUser(email, password string) (*TokenPair, time.Time, error) {
+    var user models.User
+    if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
+            return nil, time.Time{}, ErrInvalidCredentials
+        }
+        return nil, time.Time{}, err
+    }
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return nil, ErrInvalidCredentials
-	}
+    if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+        return nil, time.Time{}, ErrInvalidCredentials
+    }
 
-	return s.generateTokenPair(user.ID)
+    return s.generateTokenPair(user.ID)
 }
 
-func (s *AuthService) RefreshTokens(refreshToken string) (*TokenPair, error) {
+func (s *AuthService) RefreshTokens(refreshToken string) (*TokenPair, time.Time, error) {
     token, err := jwt.Parse(refreshToken, func(token *jwt.Token) (interface{}, error) {
         if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
             return nil, ErrTokenInvalid
@@ -97,26 +97,26 @@ func (s *AuthService) RefreshTokens(refreshToken string) (*TokenPair, error) {
     })
 
     if err != nil || !token.Valid {
-        return nil, ErrTokenInvalid
+        return nil, time.Time{}, ErrTokenInvalid
     }
 
     claims, ok := token.Claims.(jwt.MapClaims)
     if !ok {
-        return nil, ErrTokenInvalid
+        return nil, time.Time{}, ErrTokenInvalid
     }
 
     // Check if token is revoked
     isRevoked, err := s.IsTokenRevoked(refreshToken)
     if err != nil {
-        return nil, err
+        return nil, time.Time{}, err
     }
     if isRevoked {
-        return nil, ErrTokenRevoked
+        return nil, time.Time{}, ErrTokenRevoked
     }
 
     userID, ok := claims["user_id"].(float64)
     if !ok {
-        return nil, ErrTokenInvalid
+        return nil, time.Time{}, ErrTokenInvalid
     }
 
     return s.generateTokenPair(uint(userID))
@@ -178,33 +178,35 @@ func (s *AuthService) hashToken(token string) string {
     return hex.EncodeToString(hash[:])
 }
 
-func (s *AuthService) generateTokenPair(userID uint) (*TokenPair, error) {
-	// Generate Access Token
-	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": userID,
-		"exp":     time.Now().Add(s.accessExp).Unix(),
-		"type":    "access",
-	})
+func (s *AuthService) generateTokenPair(userID uint) (*TokenPair, time.Time, error) {
+    // Generate Access Token
+    accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+        "user_id": userID,
+        "exp":     time.Now().Add(s.accessExp).Unix(),
+        "type":    "access",
+    })
 
-	accessTokenString, err := accessToken.SignedString(s.jwtSecret)
-	if err != nil {
-		return nil, err
-	}
+    accessTokenString, err := accessToken.SignedString(s.jwtSecret)
+    if err != nil {
+        return nil, time.Time{}, err
+    }
 
-	// Generate Refresh Token
-	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": userID,
-		"exp":     time.Now().Add(s.refreshExp).Unix(),
-		"type":    "refresh",
-	})
+    // Generate Refresh Token
+    refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+        "user_id": userID,
+        "exp":     time.Now().Add(s.refreshExp).Unix(),
+        "type":    "refresh",
+    })
 
-	refreshTokenString, err := refreshToken.SignedString(s.jwtSecret)
-	if err != nil {
-		return nil, err
-	}
+    refreshTokenString, err := refreshToken.SignedString(s.jwtSecret)
+    if err != nil {
+        return nil, time.Time{}, err
+    }
 
-	return &TokenPair{
-		AccessToken:  accessTokenString,
-		RefreshToken: refreshTokenString,
-	}, nil
+    exp := time.Now().Add(s.refreshExp)
+
+    return &TokenPair{
+        AccessToken:  accessTokenString,
+        RefreshToken: refreshTokenString,
+    }, exp, nil
 }

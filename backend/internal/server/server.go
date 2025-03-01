@@ -47,7 +47,7 @@ func (s *Server) Start() error {
     authService := services.NewAuthService(db, s.cfg.JWT.Secret)
 
     // Initialize route handlers
-    authHandler := handler.NewAuthHandler(authService)
+    authHandler := handler.NewAuthHandler(authService, s.cfg)
 
     // Register routes
     authHandler.RegisterRoutes(s.router)
