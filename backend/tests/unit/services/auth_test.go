@@ -13,57 +13,158 @@ import (
 )
 
 func setupTestDB(t *testing.T) *gorm.DB {
-	// Use test database
-	dsn := "host=localhost user=postgres password=bytecast dbname=bytecast_test port=5432 sslmode=disable"
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("Failed to connect to test database: %v", err)
-	}
+    // Use test database
+    dsn := "host=localhost user=postgres password=bytecast dbname=bytecast_test port=5433 sslmode=disable"
+    db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+    if err != nil {
+        t.Fatalf("Failed to connect to test database: %v", err)
+    }
 
-	// Run migrations
-	if err := db.AutoMigrate(&models.User{}); err != nil {
-		t.Fatalf("Failed to run migrations: %v", err)
-	}
+    // Drop existing tables if they exist
+    db.Exec("DROP TABLE IF EXISTS revoked_tokens, users CASCADE")
 
-	// Clear test data
-	db.Exec("TRUNCATE TABLE users RESTART IDENTITY")
+    // Run migrations
+    if err := db.AutoMigrate(&models.User{}, &models.RevokedToken{}); err != nil {
+        t.Fatalf("Failed to run migrations: %v", err)
+    }
 
-	return db
+    return db
 }
 
 func TestAuthService_RegisterUser(t *testing.T) {
-	db := setupTestDB(t)
-	authService := services.NewAuthService(db, "test-secret")
+    db := setupTestDB(t)
+    authService := services.NewAuthService(db, "test-secret")
 
-	tests := []struct {
-		name     string
-		email    string
-		password string
-		wantErr  bool
-	}{
-		{
-			name:     "Valid registration",
-			email:    "test@example.com",
-			password: "password123",
-			wantErr:  false,
-		},
-		{
-			name:     "Duplicate email",
-			email:    "test@example.com",
-			password: "password123",
-			wantErr:  true,
-		},
-	}
+    tests := []struct {
+        name     string
+        email    string
+        password string
+        wantErr  bool
+    }{
+        {
+            name:     "Valid registration",
+            email:    "test@example.com",
+            password: "password123",
+            wantErr:  false,
+        },
+        {
+            name:     "Duplicate email",
+            email:    "test@example.com",
+            password: "password123",
+            wantErr:  true,
+        },
+    }
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := authService.RegisterUser(tt.email, tt.password)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("RegisterUser() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            err := authService.RegisterUser(tt.email, tt.password)
+            if (err != nil) != tt.wantErr {
+                t.Errorf("RegisterUser() error = %v, wantErr %v", err, tt.wantErr)
+            }
+        })
+    }
 }
+
+func TestAuthService_RevokeToken(t *testing.T) {
+    db := setupTestDB(t)
+    authService := services.NewAuthService(db, "test-secret")
+
+    // Register and login a test user to get tokens
+    email := "test@example.com"
+    password := "password123"
+    if err := authService.RegisterUser(email, password); err != nil {
+        t.Fatalf("Failed to register test user: %v", err)
+    }
+
+    tokens, err := authService.LoginUser(email, password)
+    if err != nil {
+        t.Fatalf("Failed to login test user: %v", err)
+    }
+
+    tests := []struct {
+        name         string
+        refreshToken string
+        wantErr      bool
+    }{
+        {
+            name:         "Valid token revocation",
+            refreshToken: tokens.RefreshToken,
+            wantErr:     false,
+        },
+        {
+            name:         "Invalid token revocation",
+            refreshToken: "invalid-token",
+            wantErr:     true,
+        },
+        {
+            name:         "Already revoked token",
+            refreshToken: tokens.RefreshToken,
+            wantErr:     true,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            err := authService.RevokeToken(tt.refreshToken)
+            if (err != nil) != tt.wantErr {
+                t.Errorf("RevokeToken() error = %v, wantErr %v", err, tt.wantErr)
+                return
+            }
+
+            // Verify token is actually revoked by attempting to refresh
+            if !tt.wantErr {
+                _, err := authService.RefreshTokens(tt.refreshToken)
+                if err == nil {
+                    t.Error("RefreshTokens() succeeded with revoked token")
+                }
+            }
+        })
+    }
+}
+
+func TestAuthService_RefreshTokens_WithRevokedToken(t *testing.T) {
+    db := setupTestDB(t)
+    authService := services.NewAuthService(db, "test-secret")
+
+    // Register and login a test user
+    email := "test@example.com"
+    password := "password123"
+    if err := authService.RegisterUser(email, password); err != nil {
+        t.Fatalf("Failed to register test user: %v", err)
+    }
+
+    tokens, err := authService.LoginUser(email, password)
+    if err != nil {
+        t.Fatalf("Failed to login test user: %v", err)
+    }
+
+    // Revoke the token
+    if err := authService.RevokeToken(tokens.RefreshToken); err != nil {
+        t.Fatalf("Failed to revoke token: %v", err)
+    }
+
+    // Attempt to use the revoked token
+    _, err = authService.RefreshTokens(tokens.RefreshToken)
+    if err == nil {
+        t.Error("RefreshTokens() succeeded with revoked token")
+    }
+
+    // Get a new token pair
+    newTokens, err := authService.LoginUser(email, password)
+    if err != nil {
+        t.Fatalf("Failed to get new tokens: %v", err)
+    }
+
+    // Verify the new tokens work
+    refreshedTokens, err := authService.RefreshTokens(newTokens.RefreshToken)
+    if err != nil {
+        t.Errorf("RefreshTokens() failed with new token: %v", err)
+    }
+    if refreshedTokens == nil {
+        t.Error("RefreshTokens() returned nil tokens")
+    }
+}
+
 
 func TestAuthService_LoginUser(t *testing.T) {
 	db := setupTestDB(t)
