@@ -1,4 +1,5 @@
 import { Component, inject } from "@angular/core";
+import { HttpErrorResponse } from "@angular/common/http";
 import { CommonModule } from "@angular/common";
 import {
   ReactiveFormsModule,
@@ -99,22 +100,35 @@ export class SignUpComponent {
           toast.success('Account created successfully');
           this.router.navigate(['/dashboard']);
         },
-        error: (error) => {
+        error: (error: HttpErrorResponse) => {
           this.isLoading = false;
-          toast.error(error.error?.message || 'Registration failed. Please try again.');
-          
-          if (error.status === 409) {
-            if (error.error?.error?.includes('Email')) {
-              this.signUpForm.get('email')?.setErrors({ exists: true });
-              toast.error('Email already exists');
-            } else if (error.error?.error?.includes('Username')) {
-              this.signUpForm.get('username')?.setErrors({ taken: true });
-              toast.error('Username already taken');
-            }
+          const errorMessage = error.error?.message || 'Registration failed. Please try again.';
+          toast.error(errorMessage);
+
+          const message = error.error?.message?.toLowerCase() || '';
+          if (message.includes('email')) {
+            this.signUpForm.get('email')?.setErrors({ exists: true });
+          } else if (message.includes('username')) {
+            this.signUpForm.get('username')?.setErrors({ taken: true });
           }
         }
       });
     } else {
+      // Show toast for invalid form
+      let errorMessage = 'Please fill all required fields correctly';
+      
+      // Check for specific validation errors to provide more helpful messages
+      if (this.signUpForm.hasError('passwordMismatch')) {
+        errorMessage = 'Passwords do not match';
+      } else if (this.signUpForm.get('password')?.hasError('pattern')) {
+        errorMessage = 'Password must contain at least one letter, one number, and one special character';
+      } else if (this.signUpForm.get('email')?.hasError('email')) {
+        errorMessage = 'Please enter a valid email address';
+      }
+      
+      toast.error(errorMessage);
+      
+      // Mark invalid fields as touched to show validation errors
       Object.keys(this.signUpForm.controls).forEach((key) => {
         const control = this.signUpForm.get(key);
         if (control?.invalid) {

@@ -1,7 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, catchError, map, of, tap } from 'rxjs';
+import { BehaviorSubject, Observable, catchError, map, of, tap, throwError } from 'rxjs';
 import { Router } from '@angular/router';
+import { toast } from 'ngx-sonner';
 
 export interface AuthResponse {
   access_token: string;
@@ -45,7 +46,9 @@ export class AuthService {
       map(() => void 0),
       catchError(error => {
         console.error('Registration failed:', error);
-        throw error;
+        const errorMessage = error.error?.message || 'Registration failed. Please try again.';
+        toast.error(errorMessage);
+        return throwError(() => this.handleError(error));
       })
     );
   }
@@ -59,7 +62,9 @@ export class AuthService {
       map(() => void 0),
       catchError(error => {
         console.error('Login failed:', error);
-        throw error;
+        const errorMessage = error.error?.message || 'Login failed. Please try again.';
+        toast.error(errorMessage);
+        return throwError(() => this.handleError(error));
       })
     );
   }
@@ -95,8 +100,12 @@ export class AuthService {
           this.clearToken();
           this.isAuthenticatedSubject.next(false);
           this.router.navigate(['/']);
+          toast.error('Your session has expired. Please log in again.');
+        } else {
+          const errorMessage = error.error?.message || 'Failed to refresh session. Please try again.';
+          toast.error(errorMessage);
         }
-        throw error;
+        return throwError(() => this.handleError(error));
       })
     );
   }
@@ -111,6 +120,13 @@ export class AuthService {
 
   getToken(): string | null {
     return localStorage.getItem(this.AUTH_TOKEN_KEY);
+  }
+
+  private handleError(error: any): Error {
+    if (error.error && typeof error.error === 'object' && 'error' in error.error) {
+      return new Error(error.error.error);
+    }
+    return new Error('An unexpected error occurred');
   }
 
   private hasValidToken(): boolean {

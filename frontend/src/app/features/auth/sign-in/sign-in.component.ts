@@ -1,4 +1,5 @@
 import { Component, inject } from "@angular/core";
+import { HttpErrorResponse } from "@angular/common/http";
 import { CommonModule } from "@angular/common";
 import {
   ReactiveFormsModule,
@@ -83,12 +84,17 @@ export class SignInComponent {
           toast.success('Signed in successfully');
           this.router.navigate(['/dashboard']);
         },
-        error: (error) => {
+        error: (error: HttpErrorResponse) => {
           this.isLoading = false;
-          toast.error(error.error?.message || 'Sign in failed. Please try again.');
+          const errorMessage = error.error?.message || 'Sign in failed. Please try again.';
+          toast.error(errorMessage);
         }
       });
     } else {
+      // Show toast for invalid form
+      toast.error('Please fill all required fields correctly');
+      
+      // Mark invalid fields as touched to show validation errors
       Object.keys(this.signInForm.controls).forEach((key) => {
         const control = this.signInForm.get(key);
         if (control?.invalid) {

@@ -66,6 +66,26 @@ export const authInterceptor: HttpInterceptorFn = (
       if (error.status === 401 && !isRefreshRequest(request.url)) {
         return handle401Error(request, next);
       }
+      
+      // Transform error to use the message from backend
+      if (error.error && typeof error.error === 'object') {
+        // Handle both new message format and legacy error format
+        const errorMessage = error.error.message || error.error.error || 'An unexpected error occurred';
+        const transformedError = new HttpErrorResponse({
+          error: {
+            message: errorMessage
+          },
+          status: error.status,
+          statusText: error.statusText,
+          url: error.url || undefined
+        });
+        
+        // Log the transformed error for debugging
+        console.log('Transformed error:', transformedError);
+        
+        return throwError(() => transformedError);
+      }
+      
       return throwError(() => error);
     })
   );
