@@ -36,60 +36,40 @@
           </div>
           <span class="sr-only">Bytecast</span>
         </a>
-        <h1 class="text-xl font-bold">Welcome to Bytecast</h1>
+        <h1 class="text-xl font-bold">Welcome back</h1>
         <div class="text-center text-sm">
-          Already have an account?
+          Don't have an account?
           <a
-            routerLink="/sign-in"
+            routerLink="/sign-up"
             class="underline underline-offset-4"
-            >Sign in</a
+            >Sign up</a
           >
         </div>
       </div>
 
       <div class="p-6 rounded-lg">
         <form
-          [formGroup]="signUpForm"
+          [formGroup]="signInForm"
           (ngSubmit)="onSubmit()"
           class="grid gap-4"
         >
-          <!-- Username Field -->
+          <!-- Identifier Field -->
           <hlm-form-field class="grid gap-1">
             <label
               hlmLabel
-              for="username"
-              >Username</label
+              for="identifier"
+              >Username or Email</label
             >
             <input
               hlmInput
-              id="username"
+              id="identifier"
               type="text"
-              formControlName="username"
-              [class.border-destructive]="showError('username')"
-              placeholder="Enter username"
+              formControlName="identifier"
+              [class.border-destructive]="showError('identifier')"
+              placeholder="Enter your username or email"
               class="w-full"
-              (focus)="setFieldFocus(true, 'username')"
-              (blur)="setFieldFocus(false, 'username')"
-            />
-          </hlm-form-field>
-
-          <!-- Email Field -->
-          <hlm-form-field class="grid gap-1">
-            <label
-              hlmLabel
-              for="email"
-              >Email</label
-            >
-            <input
-              hlmInput
-              id="email"
-              type="email"
-              formControlName="email"
-              [class.border-destructive]="showError('email')"
-              placeholder="name@example.com"
-              class="w-full"
-              (focus)="setFieldFocus(true, 'email')"
-              (blur)="setFieldFocus(false, 'email')"
+              (focus)="setFieldFocus(true, 'identifier')"
+              (blur)="setFieldFocus(false, 'identifier')"
             />
           </hlm-form-field>
 
@@ -106,30 +86,10 @@
               type="password"
               formControlName="password"
               [class.border-destructive]="showError('password')"
-              placeholder="Enter password"
+              placeholder="Enter your password"
               class="w-full"
               (focus)="setFieldFocus(true, 'password')"
               (blur)="setFieldFocus(false, 'password')"
-            />
-          </hlm-form-field>
-
-          <!-- Confirm Password Field -->
-          <hlm-form-field class="grid gap-1">
-            <label
-              hlmLabel
-              for="confirmPassword"
-              >Confirm Password</label
-            >
-            <input
-              hlmInput
-              id="confirmPassword"
-              type="password"
-              formControlName="confirmPassword"
-              [class.border-destructive]="showError('confirmPassword')"
-              placeholder="Confirm password"
-              class="w-full"
-              (focus)="setFieldFocus(true, 'confirmPassword')"
-              (blur)="setFieldFocus(false, 'confirmPassword')"
             />
           </hlm-form-field>
 
@@ -140,13 +100,13 @@
             class="w-full cursor-pointer"
             [class.opacity-50]="isLoading"
           >
-            <span *ngIf="!isLoading">Create account</span>
+            <span *ngIf="!isLoading">Sign in</span>
             <div
               *ngIf="isLoading"
               class="flex items-center justify-center gap-2"
             >
               <hlm-spinner size="sm" />
-              <span>Creating account...</span>
+              <span>Signing in...</span>
             </div>
           </button>
         </form>
@@ -204,7 +164,7 @@
       <div
         class="text-balance text-center text-xs text-muted-foreground [&_a]:underline [&_a]:underline-offset-4 hover:[&_a]:text-primary"
       >
-        By clicking continue, you agree to our
+        By continuing, you agree to our
         <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
       </div>
     </div>

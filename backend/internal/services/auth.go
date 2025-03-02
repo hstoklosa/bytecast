@@ -1,21 +1,22 @@
 package services
 
 import (
-    "crypto/sha256"
-    "encoding/hex"
-    "errors"
-    "time"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"time"
 
-    "github.com/golang-jwt/jwt"
-    "golang.org/x/crypto/bcrypt"
-    "gorm.io/gorm"
+	"github.com/golang-jwt/jwt"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 
-    "bytecast/internal/models"
+	"bytecast/internal/models"
 )
 
 var (
     ErrInvalidCredentials = errors.New("invalid email or password")
     ErrUserExists        = errors.New("user already exists")
+    ErrUsernameTaken     = errors.New("username already taken")
     ErrTokenInvalid      = errors.New("invalid token")
     ErrTokenRevoked      = errors.New("token has been revoked")
 )
@@ -41,44 +42,62 @@ func NewAuthService(db *gorm.DB, jwtSecret string) *AuthService {
 	}
 }
 
-func (s *AuthService) RegisterUser(email, password string) error {
-	var existingUser models.User
-	if err := s.db.Where("email = ?", email).First(&existingUser).Error; err == nil {
-		return ErrUserExists
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
-	}
+func (s *AuthService) RegisterUser(email, username, password string) error {
+    // Check if email exists
+    var existingUser models.User
+    if err := s.db.Where("email = ?", email).First(&existingUser).Error; err == nil {
+        return ErrUserExists
+    } else if !errors.Is(err, gorm.ErrRecordNotFound) {
+        return err
+    }
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
+    // Check if username exists
+    if err := s.db.Where("username = ?", username).First(&existingUser).Error; err == nil {
+        return ErrUsernameTaken
+    } else if !errors.Is(err, gorm.ErrRecordNotFound) {
+        return err
+    }
 
-	user := models.User{
-		Email:        email,
-		PasswordHash: string(hashedPassword),
-	}
+    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+    if err != nil {
+        return err
+    }
 
-	return s.db.Create(&user).Error
+    user := models.User{
+        Email:        email,
+        Username:     username,
+        PasswordHash: string(hashedPassword),
+    }
+
+    return s.db.Create(&user).Error
 }
 
-func (s *AuthService) LoginUser(email, password string) (*TokenPair, error) {
-	var user models.User
-	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrInvalidCredentials
-		}
-		return nil, err
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return nil, ErrInvalidCredentials
-	}
-
-	return s.generateTokenPair(user.ID)
+func (s *AuthService) FindByIdentifier(identifier string) (*models.User, error) {
+    var user models.User
+    err := s.db.Where("email = ? OR username = ?", identifier, identifier).First(&user).Error
+    if err != nil {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
+            return nil, ErrInvalidCredentials
+        }
+        return nil, err
+    }
+    return &user, nil
 }
 
-func (s *AuthService) RefreshTokens(refreshToken string) (*TokenPair, error) {
+func (s *AuthService) LoginUser(identifier, password string) (*TokenPair, time.Time, error) {
+    user, err := s.FindByIdentifier(identifier)
+    if err != nil {
+        return nil, time.Time{}, err
+    }
+
+    if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+        return nil, time.Time{}, ErrInvalidCredentials
+    }
+
+    return s.generateTokenPair(user.ID)
+}
+
+func (s *AuthService) RefreshTokens(refreshToken string) (*TokenPair, time.Time, error) {
     token, err := jwt.Parse(refreshToken, func(token *jwt.Token) (interface{}, error) {
         if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
             return nil, ErrTokenInvalid
@@ -87,26 +106,26 @@ func (s *AuthService) RefreshTokens(refreshToken string) (*TokenPair, error) {
     })
 
     if err != nil || !token.Valid {
-        return nil, ErrTokenInvalid
+        return nil, time.Time{}, ErrTokenInvalid
     }
 
     claims, ok := token.Claims.(jwt.MapClaims)
     if !ok {
-        return nil, ErrTokenInvalid
+        return nil, time.Time{}, ErrTokenInvalid
     }
 
     // Check if token is revoked
     isRevoked, err := s.IsTokenRevoked(refreshToken)
     if err != nil {
-        return nil, err
+        return nil, time.Time{}, err
     }
     if isRevoked {
-        return nil, ErrTokenRevoked
+        return nil, time.Time{}, ErrTokenRevoked
     }
 
     userID, ok := claims["user_id"].(float64)
     if !ok {
-        return nil, ErrTokenInvalid
+        return nil, time.Time{}, ErrTokenInvalid
     }
 
     return s.generateTokenPair(uint(userID))
@@ -168,33 +187,35 @@ func (s *AuthService) hashToken(token string) string {
     return hex.EncodeToString(hash[:])
 }
 
-func (s *AuthService) generateTokenPair(userID uint) (*TokenPair, error) {
-	// Generate Access Token
-	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": userID,
-		"exp":     time.Now().Add(s.accessExp).Unix(),
-		"type":    "access",
-	})
+func (s *AuthService) generateTokenPair(userID uint) (*TokenPair, time.Time, error) {
+    // Generate Access Token
+    accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+        "user_id": userID,
+        "exp":     time.Now().Add(s.accessExp).Unix(),
+        "type":    "access",
+    })
 
-	accessTokenString, err := accessToken.SignedString(s.jwtSecret)
-	if err != nil {
-		return nil, err
-	}
+    accessTokenString, err := accessToken.SignedString(s.jwtSecret)
+    if err != nil {
+        return nil, time.Time{}, err
+    }
 
-	// Generate Refresh Token
-	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": userID,
-		"exp":     time.Now().Add(s.refreshExp).Unix(),
-		"type":    "refresh",
-	})
+    // Generate Refresh Token
+    refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+        "user_id": userID,
+        "exp":     time.Now().Add(s.refreshExp).Unix(),
+        "type":    "refresh",
+    })
 
-	refreshTokenString, err := refreshToken.SignedString(s.jwtSecret)
-	if err != nil {
-		return nil, err
-	}
+    refreshTokenString, err := refreshToken.SignedString(s.jwtSecret)
+    if err != nil {
+        return nil, time.Time{}, err
+    }
 
-	return &TokenPair{
-		AccessToken:  accessTokenString,
-		RefreshToken: refreshTokenString,
-	}, nil
+    exp := time.Now().Add(s.refreshExp)
+
+    return &TokenPair{
+        AccessToken:  accessTokenString,
+        RefreshToken: refreshTokenString,
+    }, exp, nil
 }

@@ -29,7 +29,9 @@ type JWT struct {
 }
 
 type Server struct {
-    Port string `validate:"required,numeric"`
+    Port        string `validate:"required,numeric"`
+    Environment string `validate:"required,oneof=development production"`
+    Domain      string `validate:"required"`
 }
 
 // Load returns a validated configuration struct
@@ -52,7 +54,9 @@ func Load() (*Config, error) {
             Secret: getEnvWithDefault("JWT_SECRET", ""),
         },
         Server: Server{
-            Port: getEnvWithDefault("PORT", "8080"),
+            Port:        getEnvWithDefault("PORT", "8080"),
+            Environment: getEnvWithDefault("APP_ENV", "development"),
+            Domain:      getEnvWithDefault("APP_DOMAIN", "localhost"),
         },
     }
 

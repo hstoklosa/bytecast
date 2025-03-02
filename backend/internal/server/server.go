@@ -47,13 +47,13 @@ func (s *Server) Start() error {
     authService := services.NewAuthService(db, s.cfg.JWT.Secret)
 
     // Initialize route handlers
-    authHandler := handler.NewAuthHandler(authService)
+    authHandler := handler.NewAuthHandler(authService, s.cfg)
 
     // Register routes
     authHandler.RegisterRoutes(s.router)
 
     // Protected routes group
-    protected := s.router.Group("/api")
+    protected := s.router.Group("/api/v1")
     protected.Use(middleware.AuthMiddleware([]byte(s.cfg.JWT.Secret)))
     {
         protected.GET("/me", func(c *gin.Context) {
@@ -74,7 +74,7 @@ func (s *Server) Start() error {
     // Configure HTTP server
 
     s.server = &http.Server{
-        Addr:    ":" + s.cfg.Server.Port,
+        Addr:    "0.0.0.0:" + s.cfg.Server.Port,
         Handler: s.router,
     }
 
