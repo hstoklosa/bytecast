@@ -13,7 +13,7 @@ import (
 type registerRequest struct {
     Email    string `json:"email" binding:"required,email"`
     Username string `json:"username" binding:"required,min=3,max=24,alphanum"`
-    Password string `json:"password" binding:"required,min=6"`
+    Password string `json:"password" binding:"required,min=8"`
 }
 
 type loginRequest struct {
@@ -53,7 +53,7 @@ func (h *AuthHandler) setRefreshCookie(c *gin.Context, token string, exp time.Ti
 }
 
 func (h *AuthHandler) RegisterRoutes(r *gin.Engine) {
-    auth := r.Group("/auth")
+    auth := r.Group("/api/v1/auth")
     {
         auth.POST("/register", h.register)
         auth.POST("/login", h.login)
@@ -83,7 +83,18 @@ func (h *AuthHandler) register(c *gin.Context) {
         }
     }
 
-    c.JSON(http.StatusCreated, gin.H{"message": "user registered successfully"})
+    // After successful registration, perform login to generate tokens
+    tokens, exp, err := h.authService.LoginUser(req.Email, req.Password)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate tokens"})
+        return
+    }
+
+    h.setRefreshCookie(c, tokens.RefreshToken, exp)
+    
+    c.JSON(http.StatusCreated, gin.H{
+        "access_token": tokens.AccessToken,
+    })
 }
 
 func (h *AuthHandler) login(c *gin.Context) {
