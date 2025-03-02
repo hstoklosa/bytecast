@@ -62,23 +62,30 @@ func (h *AuthHandler) RegisterRoutes(r *gin.Engine) {
     }
 }
 
+func (h *AuthHandler) errorResponse(c *gin.Context, status int, message string) {
+    c.JSON(status, gin.H{
+        "message": message,
+        "status": status,
+    })
+}
+
 func (h *AuthHandler) register(c *gin.Context) {
     var req registerRequest
     if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        h.errorResponse(c, http.StatusBadRequest, "Please check your input and try again")
         return
     }
 
     if err := h.authService.RegisterUser(req.Email, req.Username, req.Password); err != nil {
         switch err {
         case services.ErrUserExists:
-            c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
+            h.errorResponse(c, http.StatusConflict, "This email is already registered")
             return
         case services.ErrUsernameTaken:
-            c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
+            h.errorResponse(c, http.StatusConflict, "This username is already taken")
             return
         default:
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register user"})
+            h.errorResponse(c, http.StatusInternalServerError, "Failed to create account. Please try again")
             return
         }
     }
@@ -86,7 +93,7 @@ func (h *AuthHandler) register(c *gin.Context) {
     // After successful registration, perform login to generate tokens
     tokens, exp, err := h.authService.LoginUser(req.Email, req.Password)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate tokens"})
+        h.errorResponse(c, http.StatusInternalServerError, "Failed to complete registration. Please try again")
         return
     }
 
@@ -100,17 +107,17 @@ func (h *AuthHandler) register(c *gin.Context) {
 func (h *AuthHandler) login(c *gin.Context) {
     var req loginRequest
     if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        h.errorResponse(c, http.StatusBadRequest, "Please check your input and try again")
         return
     }
 
     tokens, exp, err := h.authService.LoginUser(req.Identifier, req.Password)
     if err != nil {
         if err == services.ErrInvalidCredentials {
-            c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+            h.errorResponse(c, http.StatusUnauthorized, "Incorrect email or password")
             return
         }
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "login failed"})
+        h.errorResponse(c, http.StatusInternalServerError, "Failed to log in. Please try again")
         return
     }
 
@@ -124,17 +131,17 @@ func (h *AuthHandler) login(c *gin.Context) {
 func (h *AuthHandler) refresh(c *gin.Context) {
     refreshToken, err := c.Cookie("refresh_token")
     if err != nil {
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "missing refresh token"})
+        h.errorResponse(c, http.StatusUnauthorized, "Session expired. Please log in again")
         return
     }
 
     tokens, exp, err := h.authService.RefreshTokens(refreshToken)
     if err != nil {
         if err == services.ErrTokenInvalid {
-            c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+            h.errorResponse(c, http.StatusUnauthorized, "Invalid session. Please log in again")
             return
         }
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to refresh tokens"})
+        h.errorResponse(c, http.StatusInternalServerError, "Failed to refresh session. Please try again")
         return
     }
 
@@ -148,16 +155,16 @@ func (h *AuthHandler) refresh(c *gin.Context) {
 func (h *AuthHandler) logout(c *gin.Context) {
     refreshToken, err := c.Cookie("refresh_token")
     if err != nil {
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "missing refresh token"})
+        h.errorResponse(c, http.StatusUnauthorized, "No active session found")
         return
     }
 
     if err := h.authService.RevokeToken(refreshToken); err != nil {
         switch err {
         case services.ErrTokenInvalid:
-            c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+            h.errorResponse(c, http.StatusUnauthorized, "Invalid session")
         default:
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to logout"})
+            h.errorResponse(c, http.StatusInternalServerError, "Failed to log out. Please try again")
         }
         return
     }
