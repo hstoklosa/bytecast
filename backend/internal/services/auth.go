@@ -72,12 +72,21 @@ func (s *AuthService) RegisterUser(email, username, password string) error {
     return s.db.Create(&user).Error
 }
 
-func (s *AuthService) LoginUser(email, password string) (*TokenPair, time.Time, error) {
+func (s *AuthService) FindByIdentifier(identifier string) (*models.User, error) {
     var user models.User
-    if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
+    err := s.db.Where("email = ? OR username = ?", identifier, identifier).First(&user).Error
+    if err != nil {
         if errors.Is(err, gorm.ErrRecordNotFound) {
-            return nil, time.Time{}, ErrInvalidCredentials
+            return nil, ErrInvalidCredentials
         }
+        return nil, err
+    }
+    return &user, nil
+}
+
+func (s *AuthService) LoginUser(identifier, password string) (*TokenPair, time.Time, error) {
+    user, err := s.FindByIdentifier(identifier)
+    if err != nil {
         return nil, time.Time{}, err
     }
 

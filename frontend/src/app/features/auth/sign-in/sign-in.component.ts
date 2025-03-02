@@ -49,8 +49,8 @@ export class SignInComponent {
 
   constructor(private fb: FormBuilder) {
     this.signInForm = this.fb.group({
-      identifier: ["", [Validators.required]],
-      password: ["", [Validators.required]],
+      identifier: ["", [Validators.required, Validators.minLength(3)]],
+      password: ["", [Validators.required, Validators.minLength(6)]],
     });
   }
 
@@ -80,16 +80,12 @@ export class SignInComponent {
       this.authService.login(this.signInForm.value).subscribe({
         next: () => {
           this.isLoading = false;
-          toast.success('Successfully signed in');
+          toast.success('Signed in successfully');
           this.router.navigate(['/dashboard']);
         },
         error: (error) => {
           this.isLoading = false;
           toast.error(error.error?.message || 'Sign in failed. Please try again.');
-          
-          if (error.status === 401) {
-            toast.error('Invalid credentials');
-          }
         }
       });
     } else {
