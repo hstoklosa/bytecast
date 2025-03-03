@@ -16,7 +16,7 @@ func main() {
     }
 
     // Initialize database connection
-    dbConn, err := database.New(&cfg.Database)
+    dbConn, err := database.New(cfg)
     if err != nil {
         log.Fatal("Failed to initialize database:", err)
     }
