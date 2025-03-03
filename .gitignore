@@ -16,11 +16,12 @@ dist/
 build/
 tmp/
 
-# Logs
-*.log
-
 # Docker volumes
 postgres_data/
 
 # Angular specific
 .angular/
+
+# Logs etc
+*.log
+.DS_Store
