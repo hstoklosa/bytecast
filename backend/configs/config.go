@@ -11,9 +11,16 @@ import (
 
 // Config holds all configuration for the application
 type Config struct {
-    Database Database `validate:"required"`
-    JWT      JWT      `validate:"required"`
-    Server   Server   `validate:"required"`
+    Database  Database  `validate:"required"`
+    JWT       JWT       `validate:"required"`
+    Server    Server    `validate:"required"`
+    Superuser Superuser `validate:"required"`
+}
+
+type Superuser struct {
+    Username string `validate:"required"`
+    Email    string `validate:"required,email"`
+    Password string `validate:"required,min=8"`
 }
 
 type Database struct {
@@ -43,6 +50,11 @@ func Load() (*Config, error) {
 
     // Map environment variables to match docker-compose naming
     cfg := &Config{
+        Superuser: Superuser{
+            Username: getEnvWithDefault("SUPERUSER_USERNAME", "admin"),
+            Email:    getEnvWithDefault("SUPERUSER_EMAIL", "admin@example.com"),
+            Password: getEnvWithDefault("SUPERUSER_PASSWORD", ""),
+        },
         Database: Database{
             Host:     getEnvWithDefault("DB_HOST", getEnvWithDefault("POSTGRES_HOST", "localhost")),
             User:     getEnvWithDefault("DB_USER", getEnvWithDefault("POSTGRES_USER", "postgres")),
