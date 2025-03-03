@@ -43,7 +43,12 @@ func (c *Connection) DB() *gorm.DB {
 
 // RunMigrations executes all database migrations
 func (c *Connection) RunMigrations() error {
-    if err := c.db.AutoMigrate(&models.User{}, &models.RevokedToken{}); err != nil {
+    if err := c.db.AutoMigrate(
+        &models.User{},
+        &models.RevokedToken{},
+        &models.Channel{},
+        &models.Watchlist{},
+    ); err != nil {
         return fmt.Errorf("failed to run migrations: %w", err)
     }
     return nil

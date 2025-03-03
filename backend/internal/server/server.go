@@ -45,12 +45,20 @@ func (s *Server) Start() error {
 
     // Initialize services
     authService := services.NewAuthService(db, s.cfg.JWT.Secret)
+    watchlistService := services.NewWatchlistService(db)
 
     // Initialize route handlers
     authHandler := handler.NewAuthHandler(authService, s.cfg)
+    watchlistHandler := handler.NewWatchlistHandler(watchlistService)
 
     // Register routes
     authHandler.RegisterRoutes(s.router)
+    
+    // Auth middleware for protected routes
+    authMiddleware := middleware.AuthMiddleware([]byte(s.cfg.JWT.Secret))
+    
+    // Register watchlist routes with auth middleware
+    watchlistHandler.RegisterRoutes(s.router, authMiddleware)
 
     // Protected routes group
     protected := s.router.Group("/api/v1")
