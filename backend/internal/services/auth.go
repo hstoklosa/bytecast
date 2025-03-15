@@ -27,39 +27,59 @@ type TokenPair struct {
 }
 
 type AuthService struct {
-	db          *gorm.DB
-	jwtSecret   []byte
-	accessExp   time.Duration
-	refreshExp  time.Duration
+    db            *gorm.DB
+    watchlistSvc  *WatchlistService
+    jwtSecret     []byte
+    accessExp     time.Duration
+    refreshExp    time.Duration
 }
 
-func NewAuthService(db *gorm.DB, jwtSecret string) *AuthService {
-	return &AuthService{
-		db:         db,
-		jwtSecret:  []byte(jwtSecret),
-		accessExp:  15 * time.Minute,  // 15 minutes
-		refreshExp: 7 * 24 * time.Hour, // 7 days
-	}
+func NewAuthService(db *gorm.DB, watchlistSvc *WatchlistService, jwtSecret string) *AuthService {
+    return &AuthService{
+        db:           db,
+        watchlistSvc: watchlistSvc,
+        jwtSecret:    []byte(jwtSecret),
+        accessExp:    15 * time.Minute,  // 15 minutes
+        refreshExp:   7 * 24 * time.Hour, // 7 days
+    }
 }
 
 func (s *AuthService) RegisterUser(email, username, password string) error {
+    // Start transaction
+    tx := s.db.Begin()
+    if tx.Error != nil {
+        return tx.Error
+    }
+    
+    // Defer rollback in case of error
+    defer func() {
+        if r := recover(); r != nil {
+            tx.Rollback()
+        }
+    }()
+
     // Check if email exists
     var existingUser models.User
-    if err := s.db.Where("email = ?", email).First(&existingUser).Error; err == nil {
+    if err := tx.Where("email = ?", email).First(&existingUser).Error; err == nil {
+        tx.Rollback()
         return ErrUserExists
     } else if !errors.Is(err, gorm.ErrRecordNotFound) {
+        tx.Rollback()
         return err
     }
 
     // Check if username exists
-    if err := s.db.Where("username = ?", username).First(&existingUser).Error; err == nil {
+    if err := tx.Where("username = ?", username).First(&existingUser).Error; err == nil {
+        tx.Rollback()
         return ErrUsernameTaken
     } else if !errors.Is(err, gorm.ErrRecordNotFound) {
+        tx.Rollback()
         return err
     }
 
     hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
     if err != nil {
+        tx.Rollback()
         return err
     }
 
@@ -69,7 +89,23 @@ func (s *AuthService) RegisterUser(email, username, password string) error {
         PasswordHash: string(hashedPassword),
     }
 
-    return s.db.Create(&user).Error
+    if err := tx.Create(&user).Error; err != nil {
+        tx.Rollback()
+        return err
+    }
+
+    // Create default watchlist
+    watchlist := models.Watchlist{
+        UserID:      user.ID,
+        Name:        "Default",
+        Description: "Your default watchlist",
+    }
+    if err := tx.Create(&watchlist).Error; err != nil {
+        tx.Rollback()
+        return err
+    }
+
+    return tx.Commit().Error
 }
 
 func (s *AuthService) FindByIdentifier(identifier string) (*models.User, error) {

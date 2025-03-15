@@ -87,8 +87,37 @@ func (c *Connection) ensureSuperuser() error {
         PasswordHash: string(hashedPassword),
     }
 
-    if err := c.db.Create(superuser).Error; err != nil {
+    // Use transaction to ensure both user and default watchlist are created
+    tx := c.db.Begin()
+    if tx.Error != nil {
+        return fmt.Errorf("failed to begin transaction: %w", tx.Error)
+    }
+    
+    // Defer rollback in case of error
+    defer func() {
+        if r := recover(); r != nil {
+            tx.Rollback()
+        }
+    }()
+
+    if err := tx.Create(superuser).Error; err != nil {
+        tx.Rollback()
         return fmt.Errorf("failed to create superuser: %w", err)
+    }
+
+    // Create default watchlist for superuser
+    watchlist := &models.Watchlist{
+        UserID:      superuser.ID,
+        Name:        "Default",
+        Description: "Your default watchlist",
+    }
+    if err := tx.Create(watchlist).Error; err != nil {
+        tx.Rollback()
+        return fmt.Errorf("failed to create default watchlist: %w", err)
+    }
+
+    if err := tx.Commit().Error; err != nil {
+        return fmt.Errorf("failed to commit transaction: %w", err)
     }
 
     return nil
