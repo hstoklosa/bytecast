@@ -1,0 +1,72 @@
+<section hlmCard>
+  <div
+    hlmCardContent
+    class="pt-6"
+  >
+    <form
+      (ngSubmit)="handleSearch()"
+      class="flex w-full items-center space-x-2"
+    >
+      <input
+        [formControl]="searchQuery"
+        type="text"
+        placeholder="Search for YouTube channels"
+        hlmInput
+        class="flex-1"
+      />
+      <button
+        hlmBtn
+        type="submit"
+        [disabled]="isLoading"
+      >
+        <hlm-spinner
+          *ngIf="isLoading"
+          size="sm"
+          class="mr-2"
+        />
+        <lucide-angular
+          *ngIf="!isLoading"
+          [img]="searchIcon"
+          class="mr-2 h-4 w-4"
+        ></lucide-angular>
+        Search
+      </button>
+    </form>
+
+    @if (searchResults.length > 0) {
+    <div class="mt-4 space-y-4">
+      <h3 class="font-medium">Search Results</h3>
+      <div class="space-y-3">
+        @for (channel of searchResults; track channel.id) {
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <img
+              [src]="channel.thumbnailUrl"
+              [alt]="channel.title"
+              class="h-11 w-11 rounded-full object-cover"
+            />
+            <div>
+              <h4 class="font-medium">{{ channel.title }}</h4>
+              <p class="text-sm text-muted-foreground">
+                {{ channel.subscriberCount }} subscribers
+              </p>
+            </div>
+          </div>
+          <button
+            hlmBtn
+            size="sm"
+            (click)="addToWatchlist(channel)"
+          >
+            <lucide-angular
+              [img]="plusIcon"
+              class="mr-2 h-4 w-4"
+            ></lucide-angular>
+            Add
+          </button>
+        </div>
+        }
+      </div>
+    </div>
+    }
+  </div>
+</section>
