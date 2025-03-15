@@ -28,12 +28,24 @@ func NewWatchlistService(db *gorm.DB) *WatchlistService {
 	}
 }
 
+// CreateDefaultWatchlist creates a default watchlist for a newly registered user
+func (s *WatchlistService) CreateDefaultWatchlist(userID uint) error {
+	watchlist := models.Watchlist{
+		UserID:      userID,
+		Name:        "Default",
+		Description: "Your default watchlist",
+		Color:       "#3b82f6", // Default blue color
+	}
+	return s.db.Create(&watchlist).Error
+}
+
 // CreateWatchlist creates a new watchlist for a user
-func (s *WatchlistService) CreateWatchlist(userID uint, name, description string) (*models.Watchlist, error) {
+func (s *WatchlistService) CreateWatchlist(userID uint, name, description, color string) (*models.Watchlist, error) {
 	watchlist := models.Watchlist{
 		UserID:      userID,
 		Name:        name,
 		Description: description,
+		Color:       color,
 	}
 
 	if err := s.db.Create(&watchlist).Error; err != nil {
@@ -66,8 +78,8 @@ func (s *WatchlistService) GetUserWatchlists(userID uint) ([]models.Watchlist, e
 	return watchlists, nil
 }
 
-// UpdateWatchlist updates a watchlist's name and description
-func (s *WatchlistService) UpdateWatchlist(watchlistID, userID uint, name, description string) (*models.Watchlist, error) {
+// UpdateWatchlist updates a watchlist's name, description, and color
+func (s *WatchlistService) UpdateWatchlist(watchlistID, userID uint, name, description, color string) (*models.Watchlist, error) {
 	watchlist, err := s.GetWatchlist(watchlistID, userID)
 	if err != nil {
 		return nil, err
@@ -75,6 +87,7 @@ func (s *WatchlistService) UpdateWatchlist(watchlistID, userID uint, name, descr
 
 	watchlist.Name = name
 	watchlist.Description = description
+	watchlist.Color = color
 
 	if err := s.db.Save(watchlist).Error; err != nil {
 		return nil, err

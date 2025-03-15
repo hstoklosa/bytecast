@@ -39,6 +39,18 @@
       ],
       "@spartan-ng/ui-icon-helm": [
         "./libs/ui/ui-icon-helm/src/index.ts"
+      ],
+      "@spartan-ng/ui-tabs-helm": [
+        "./libs/ui/ui-tabs-helm/src/index.ts"
+      ],
+      "@spartan-ng/ui-badge-helm": [
+        "./libs/ui/ui-badge-helm/src/index.ts"
+      ],
+      "@spartan-ng/ui-select-helm": [
+        "./libs/ui/ui-select-helm/src/index.ts"
+      ],
+      "@spartan-ng/ui-menu-helm": [
+        "./libs/ui/ui-menu-helm/src/index.ts"
       ]
     }
   },

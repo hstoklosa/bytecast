@@ -44,8 +44,8 @@ func (s *Server) Start() error {
     db := s.db.DB()
 
     // Initialize services
-    authService := services.NewAuthService(db, s.cfg.JWT.Secret)
     watchlistService := services.NewWatchlistService(db)
+    authService := services.NewAuthService(db, watchlistService, s.cfg.JWT.Secret)
 
     // Initialize route handlers
     authHandler := handler.NewAuthHandler(authService, s.cfg)

@@ -1,36 +1,52 @@
 package handler
 
 import (
-	"net/http"
-	"strconv"
+"net/http"
+"regexp"
+"strconv"
 
-	"github.com/gin-gonic/gin"
+"github.com/gin-gonic/gin"
+"github.com/gin-gonic/gin/binding"
+"github.com/go-playground/validator/v10"
 
-	"bytecast/internal/models"
-	"bytecast/internal/services"
+"bytecast/internal/models"
+"bytecast/internal/services"
 )
 
 // Request and response structs
 type createWatchlistRequest struct {
-	Name        string `json:"name" binding:"required,min=1,max=255"`
-	Description string `json:"description"`
+Name        string `json:"name" binding:"required,min=1,max=255"`
+Description string `json:"description"`
+Color       string `json:"color" binding:"required,hexcolor"`
 }
 
 type updateWatchlistRequest struct {
-	Name        string `json:"name" binding:"required,min=1,max=255"`
-	Description string `json:"description"`
+Name        string `json:"name" binding:"required,min=1,max=255"`
+Description string `json:"description"`
+Color       string `json:"color" binding:"required,hexcolor"`
 }
 
 type addChannelRequest struct {
-	ChannelID string `json:"channel_id" binding:"required"` // Can be URL or ID
+ChannelID string `json:"channel_id" binding:"required"` // Can be URL or ID
 }
 
 type watchlistResponse struct {
-	ID          uint   `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+ID          uint   `json:"id"`
+Name        string `json:"name"`
+Description string `json:"description"`
+Color       string `json:"color"`
+CreatedAt   string `json:"created_at"`
+UpdatedAt   string `json:"updated_at"`
+}
+
+func init() {
+if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+v.RegisterValidation("hexcolor", validateHexColor)
+}
+}
+
+func validateHexColor(fl validator.FieldLevel) bool {
+return regexp.MustCompile(`^#[a-fA-F0-9]{6}$`).MatchString(fl.Field().String())
 }
 
 type channelResponse struct {
@@ -103,7 +119,7 @@ func (h *WatchlistHandler) createWatchlist(c *gin.Context) {
 		return
 	}
 
-	watchlist, err := h.watchlistService.CreateWatchlist(userID, req.Name, req.Description)
+	watchlist, err := h.watchlistService.CreateWatchlist(userID, req.Name, req.Description, req.Color)
 	if err != nil {
 		h.errorResponse(c, http.StatusInternalServerError, "Failed to create watchlist")
 		return
@@ -180,7 +196,7 @@ func (h *WatchlistHandler) updateWatchlist(c *gin.Context) {
 		return
 	}
 
-	watchlist, err := h.watchlistService.UpdateWatchlist(uint(watchlistID), userID, req.Name, req.Description)
+	watchlist, err := h.watchlistService.UpdateWatchlist(uint(watchlistID), userID, req.Name, req.Description, req.Color)
 	if err != nil {
 		if err == services.ErrWatchlistNotFound {
 			h.errorResponse(c, http.StatusNotFound, "Watchlist not found")
@@ -324,13 +340,14 @@ func (h *WatchlistHandler) removeChannel(c *gin.Context) {
 
 // Helper functions to convert models to response structs
 func watchlistToResponse(watchlist *models.Watchlist) watchlistResponse {
-	return watchlistResponse{
-		ID:          watchlist.ID,
-		Name:        watchlist.Name,
-		Description: watchlist.Description,
-		CreatedAt:   watchlist.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:   watchlist.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-	}
+return watchlistResponse{
+ID:          watchlist.ID,
+Name:        watchlist.Name,
+Description: watchlist.Description,
+Color:       watchlist.Color,
+CreatedAt:   watchlist.CreatedAt.Format("2006-01-02T15:04:05Z"),
+UpdatedAt:   watchlist.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+}
 }
 
 func channelToResponse(channel *models.Channel) channelResponse {
