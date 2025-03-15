@@ -1,4 +1,4 @@
-# ByteCast
+# Bytecast
 
 [![Go Version](https://img.shields.io/badge/Go-1.23.4-00ADD8.svg)](https://go.dev/)
 [![Angular Version](https://img.shields.io/badge/Angular-19-DD0031.svg)](https://angular.io/)
