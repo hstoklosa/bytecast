@@ -95,12 +95,7 @@ func (s *AuthService) RegisterUser(email, username, password string) error {
     }
 
     // Create default watchlist
-    watchlist := models.Watchlist{
-        UserID:      user.ID,
-        Name:        "Default",
-        Description: "Your default watchlist",
-    }
-    if err := tx.Create(&watchlist).Error; err != nil {
+    if err := s.watchlistSvc.CreateDefaultWatchlist(user.ID); err != nil {
         tx.Rollback()
         return err
     }

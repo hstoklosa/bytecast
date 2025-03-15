@@ -1,6 +1,8 @@
 package models
 
 import (
+	"fmt"
+	"regexp"
 	"gorm.io/gorm"
 )
 
@@ -10,7 +12,33 @@ type Watchlist struct {
 	UserID      uint   `gorm:"index;not null"` // Foreign key to User
 	Name        string `gorm:"size:255;not null"`
 	Description string `gorm:"type:text"`
+	Color       string `gorm:"size:7;not null;check:color ~ '^#[a-fA-F0-9]{6}$'"`
 	Channels    []*Channel `gorm:"many2many:watchlist_channels;"`
+}
+
+// ValidateColor checks if the color is a valid hex code
+func (w *Watchlist) ValidateColor() error {
+	if w.Color == "" {
+		return fmt.Errorf("color is required")
+	}
+	
+	matched, err := regexp.MatchString(`^#[a-fA-F0-9]{6}$`, w.Color)
+	if err != nil {
+		return fmt.Errorf("invalid color format")
+	}
+	if !matched {
+		return fmt.Errorf("color must be a valid 6-digit hex code (e.g. #FF0000)")
+	}
+	
+	return nil
+}
+
+// BeforeSave Hook to validate the watchlist before saving
+func (w *Watchlist) BeforeSave(tx *gorm.DB) error {
+	if err := w.ValidateColor(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // TableName specifies the table name for the Watchlist model
