@@ -44,21 +44,62 @@ func (c *Connection) DB() *gorm.DB {
 
 // RunMigrations executes all database migrations and ensures superuser exists
 func (c *Connection) RunMigrations() error {
-    if err := c.db.AutoMigrate(
+    // Start a transaction
+    tx := c.db.Begin()
+    if tx.Error != nil {
+        return fmt.Errorf("failed to begin transaction: %w", tx.Error)
+    }
+    defer func() {
+        if r := recover(); r != nil {
+            tx.Rollback()
+        }
+    }()
+
+    // Check if color column exists
+    var hasColorColumn bool
+    if err := tx.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'watchlists' AND column_name = 'color')").Scan(&hasColorColumn).Error; err != nil {
+        tx.Rollback()
+        return fmt.Errorf("failed to check color column: %w", err)
+    }
+
+    // If color column doesn't exist, add it as nullable first
+    if !hasColorColumn {
+        if err := tx.Exec("ALTER TABLE watchlists ADD COLUMN color VARCHAR(7)").Error; err != nil {
+            tx.Rollback()
+            return fmt.Errorf("failed to add color column: %w", err)
+        }
+
+        // Set default color for existing records
+        if err := tx.Exec("UPDATE watchlists SET color = '#3b82f6' WHERE color IS NULL").Error; err != nil {
+            tx.Rollback()
+            return fmt.Errorf("failed to set default colors: %w", err)
+        }
+
+        // Make column not null
+        if err := tx.Exec("ALTER TABLE watchlists ALTER COLUMN color SET NOT NULL").Error; err != nil {
+            tx.Rollback()
+            return fmt.Errorf("failed to set color not null: %w", err)
+        }
+    }
+
+    // Run other migrations
+    if err := tx.AutoMigrate(
         &models.User{},
         &models.RevokedToken{},
         &models.Channel{},
         &models.Watchlist{},
     ); err != nil {
+        tx.Rollback()
         return fmt.Errorf("failed to run migrations: %w", err)
     }
 
     // Create superuser if it doesn't exist
     if err := c.ensureSuperuser(); err != nil {
+        tx.Rollback()
         return fmt.Errorf("failed to ensure superuser exists: %w", err)
     }
 
-    return nil
+    return tx.Commit().Error
 }
 
 // ensureSuperuser creates the superuser if it doesn't already exist
@@ -110,6 +151,7 @@ func (c *Connection) ensureSuperuser() error {
         UserID:      superuser.ID,
         Name:        "Default",
         Description: "Your default watchlist",
+        Color:       "#3b82f6", // Default blue color
     }
     if err := tx.Create(watchlist).Error; err != nil {
         tx.Rollback()
