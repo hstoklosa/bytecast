@@ -125,6 +125,11 @@ export class WatchlistService {
     }
   }
 
+  // Update channels directly
+  updateChannels(channels: Channel[]): void {
+    this._channels.set(channels);
+  }
+
   // Channel operations
   searchChannels(query: string): Observable<Channel[]> {
     return this.http.get<Channel[]>(`${this.apiUrl}/search?q=${query}`).pipe(

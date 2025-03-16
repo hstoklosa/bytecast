@@ -225,6 +225,16 @@ export class WatchlistManagerComponent {
     // Initialize search terms with current values
     this.watchlistSearchControl.setValue("", { emitEvent: true });
     this.channelSearchControl.setValue("", { emitEvent: true });
+
+    // Subscribe to channel service channels signal to keep UI updated
+    effect(() => {
+      // This effect will run whenever the channels signal changes
+      const updatedChannels = this.channelService.channels();
+      if (updatedChannels) {
+        // Update the watchlist service channels
+        this.watchlistService.updateChannels(updatedChannels);
+      }
+    });
   }
 
   // UI Helpers
@@ -268,13 +278,22 @@ export class WatchlistManagerComponent {
     const watchlistId = this.selectedWatchlistId();
     if (!watchlistId) return;
 
-    // Since the method signature might be different, we'll adapt our call
+    // Find the channel to get its YouTube ID
+    const channel = this.channels()?.find((c) => c.id === channelId);
+    if (!channel) {
+      toast.error("Channel not found");
+      return;
+    }
+
     this.channelService
-      .removeChannelFromWatchlist(channelId, String(watchlistId))
+      .removeChannelFromWatchlist(
+        channelId,
+        String(watchlistId),
+        channel.youtube_id
+      )
       .subscribe({
         next: () => {
-          this.refreshChannels(watchlistId);
-          toast.success("Channel removed from watchlist");
+          // The channel list will be refreshed by the channelService
         },
         error: () => {
           toast.error("Failed to remove channel from watchlist");
@@ -353,10 +372,19 @@ export class WatchlistManagerComponent {
     }
   }
 
+  // Handle channel added event
+  onChannelAdded(): void {
+    const watchlistId = this.selectedWatchlistId();
+    if (watchlistId) {
+      this.refreshChannels(watchlistId);
+    }
+  }
+
   private refreshChannels(watchlistId: number): void {
     this.channelService.getChannelsInWatchlist(watchlistId).subscribe({
       next: (channels) => {
-        // The channels will be updated through the watchlistService
+        // Update the channels in the watchlistService
+        this.watchlistService.updateChannels(channels);
       },
       error: () => {
         toast.error("Failed to refresh channels");

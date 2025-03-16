@@ -1,6 +1,6 @@
 import { HttpClient } from "@angular/common/http";
-import { Injectable, inject, signal } from "@angular/core";
-import { Observable, catchError, map, throwError } from "rxjs";
+import { Injectable, inject, signal, EventEmitter, Output } from "@angular/core";
+import { Observable, catchError, map, throwError, tap } from "rxjs";
 import { toast } from "ngx-sonner";
 import { AddChannelDTO, Channel } from "../models";
 
@@ -13,9 +13,14 @@ export class ChannelService {
 
   // State management using signals
   private _searchResults = signal<Channel[]>([]);
+  private _channels = signal<Channel[]>([]);
+
+  // Event emitter for channel changes
+  @Output() channelAdded = new EventEmitter<number>();
 
   // Public readonly signals
   readonly searchResults = this._searchResults.asReadonly();
+  readonly channels = this._channels.asReadonly();
 
   /**
    * Search for YouTube channels by query
@@ -47,6 +52,12 @@ export class ChannelService {
     return this.http
       .post<void>(`${this.apiUrl}/watchlists/${watchlistId}/channels`, data)
       .pipe(
+        tap(() => {
+          // After successfully adding a channel, refresh the channels list
+          this.getChannelsInWatchlist(watchlistId).subscribe();
+          // Emit an event to notify components that a channel was added
+          this.channelAdded.emit(watchlistId);
+        }),
         map(() => {
           toast.success("Channel added to watchlist");
         }),
@@ -59,18 +70,24 @@ export class ChannelService {
 
   /**
    * Remove a channel from a watchlist
+   * @param channelId Database ID of the channel
    * @param watchlistId ID of the watchlist
-   * @param channelId YouTube channel ID
+   * @param youtubeId YouTube ID of the channel
    */
   removeChannelFromWatchlist(
-    watchlistId: number,
-    channelId: string
+    channelId: number,
+    watchlistId: string,
+    youtubeId: string
   ): Observable<void> {
     return this.http
       .delete<void>(
-        `${this.apiUrl}/watchlists/${watchlistId}/channels/${channelId}`
+        `${this.apiUrl}/watchlists/${watchlistId}/channels/${youtubeId}`
       )
       .pipe(
+        tap(() => {
+          // After successfully removing a channel, refresh the channels list
+          this.getChannelsInWatchlist(Number(watchlistId)).subscribe();
+        }),
         map(() => {
           toast.success("Channel removed from watchlist");
         }),
@@ -91,7 +108,11 @@ export class ChannelService {
         `${this.apiUrl}/watchlists/${watchlistId}/channels`
       )
       .pipe(
-        map((response) => response.channels),
+        map((response) => {
+          const channels = response.channels;
+          this._channels.set(channels);
+          return channels;
+        }),
         catchError((error) => {
           toast.error("Failed to fetch channels");
           return throwError(() => error);

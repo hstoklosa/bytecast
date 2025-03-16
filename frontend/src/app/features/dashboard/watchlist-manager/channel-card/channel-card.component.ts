@@ -65,7 +65,11 @@ export class ChannelCardComponent {
 
   removeChannel(): void {
     this.channelService
-      .removeChannelFromWatchlist(this.watchlistId, this.channel.youtube_id)
+      .removeChannelFromWatchlist(
+        this.channel.id,
+        String(this.watchlistId),
+        this.channel.youtube_id
+      )
       .subscribe({
         next: () => {
           this.channelRemoved.emit();
