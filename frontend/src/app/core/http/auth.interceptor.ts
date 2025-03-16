@@ -1,12 +1,13 @@
-import { inject } from '@angular/core';
+import { inject } from "@angular/core";
 import {
   HttpRequest,
   HttpHandlerFn,
   HttpInterceptorFn,
   HttpErrorResponse,
-} from '@angular/common/http';
-import { Observable, catchError, switchMap, throwError } from 'rxjs';
-import { AuthService } from './auth.service';
+} from "@angular/common/http";
+import { Observable, catchError, switchMap, throwError } from "rxjs";
+
+import { AuthService } from "../services";
 
 let isRefreshing = false;
 
@@ -50,11 +51,10 @@ export const authInterceptor: HttpInterceptorFn = (
     return handler(req);
   };
 
-  const isAuthEndpoint = (url: string): boolean =>
-    url.includes('/api/v1/auth/');
+  const isAuthEndpoint = (url: string): boolean => url.includes("/api/v1/auth/");
 
   const isRefreshRequest = (url: string): boolean =>
-    url.includes('/api/v1/auth/refresh');
+    url.includes("/api/v1/auth/refresh");
 
   // Skip adding token for auth endpoints (except refresh)
   if (isAuthEndpoint(request.url) && !isRefreshRequest(request.url)) {
@@ -66,26 +66,29 @@ export const authInterceptor: HttpInterceptorFn = (
       if (error.status === 401 && !isRefreshRequest(request.url)) {
         return handle401Error(request, next);
       }
-      
+
       // Transform error to use the message from backend
-      if (error.error && typeof error.error === 'object') {
+      if (error.error && typeof error.error === "object") {
         // Handle both new message format and legacy error format
-        const errorMessage = error.error.message || error.error.error || 'An unexpected error occurred';
+        const errorMessage =
+          error.error.message ||
+          error.error.error ||
+          "An unexpected error occurred";
         const transformedError = new HttpErrorResponse({
           error: {
-            message: errorMessage
+            message: errorMessage,
           },
           status: error.status,
           statusText: error.statusText,
-          url: error.url || undefined
+          url: error.url || undefined,
         });
-        
+
         // Log the transformed error for debugging
-        console.log('Transformed error:', transformedError);
-        
+        console.log("Transformed error:", transformedError);
+
         return throwError(() => transformedError);
       }
-      
+
       return throwError(() => error);
     })
   );

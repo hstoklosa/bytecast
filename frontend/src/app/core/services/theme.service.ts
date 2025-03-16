@@ -7,8 +7,7 @@ import {
   Inject,
 } from "@angular/core";
 import { DOCUMENT, isPlatformBrowser } from "@angular/common";
-
-export type Theme = "light" | "dark" | "system";
+import { Theme } from "../models/theme.model";
 
 @Injectable({
   providedIn: "root",

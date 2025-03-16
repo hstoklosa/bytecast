@@ -14,8 +14,9 @@ import {
 import { provideIcons } from "@ng-icons/core";
 import { lucideSettings, lucideUser } from "@ng-icons/lucide";
 import { HlmIconDirective } from "@spartan-ng/ui-icon-helm";
-import { AuthService } from "../../core/auth/auth.service";
-import { ThemeToggleComponent } from "../../shared/components/theme-toggle/theme-toggle.component";
+
+import { AuthService } from "../../core/services";
+import { ThemeToggleComponent } from "../../shared/components";
 
 @Component({
   selector: "app-dashboard-layout",
@@ -88,6 +89,7 @@ import { ThemeToggleComponent } from "../../shared/components/theme-toggle/theme
       </main>
     </div>
   `,
+  styleUrls: ["./dashboard-layout.component.css"],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DashboardLayoutComponent {

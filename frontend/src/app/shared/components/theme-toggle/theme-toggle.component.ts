@@ -1,10 +1,12 @@
 import { Component, inject } from "@angular/core";
 import { CommonModule } from "@angular/common";
-import { ThemeService, Theme } from "../../../core/services/theme.service";
 import { HlmButtonDirective } from "@spartan-ng/ui-button-helm";
 import { NgIconComponent, provideIcons } from "@ng-icons/core";
 import { HlmIconDirective } from "@spartan-ng/ui-icon-helm";
 import { lucideMoon, lucideSun } from "@ng-icons/lucide";
+
+import { Theme } from "../../../core/models";
+import { ThemeService } from "../../../core/services";
 
 @Component({
   selector: "app-theme-toggle",
