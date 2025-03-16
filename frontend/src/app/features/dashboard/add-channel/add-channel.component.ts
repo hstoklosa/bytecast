@@ -1,19 +1,13 @@
 import { ChangeDetectionStrategy, Component, inject, Input } from "@angular/core";
 import { FormControl, ReactiveFormsModule } from "@angular/forms";
 import { HlmButtonDirective } from "@spartan-ng/ui-button-helm";
-import {
-  HlmCardContentDirective,
-  HlmCardDescriptionDirective,
-  HlmCardDirective,
-  HlmCardHeaderDirective,
-  HlmCardTitleDirective,
-} from "@spartan-ng/ui-card-helm";
 import { HlmInputDirective } from "@spartan-ng/ui-input-helm";
 import { NgIf } from "@angular/common";
 import { HlmSpinnerComponent } from "@spartan-ng/ui-spinner-helm";
 import { LucideAngularModule, Search, Plus } from "lucide-angular";
+import { toast } from "ngx-sonner";
 
-import { WatchlistService } from "../../../core/services/watchlist.service";
+import { ChannelService } from "../../../core/services/channel.service";
 import { Channel } from "../../../core/models";
 
 @Component({
@@ -22,11 +16,6 @@ import { Channel } from "../../../core/models";
   imports: [
     ReactiveFormsModule,
     HlmButtonDirective,
-    HlmCardDirective,
-    HlmCardHeaderDirective,
-    HlmCardTitleDirective,
-    HlmCardDescriptionDirective,
-    HlmCardContentDirective,
     HlmInputDirective,
     HlmSpinnerComponent,
     NgIf,
@@ -39,7 +28,7 @@ import { Channel } from "../../../core/models";
 export class AddChannelComponent {
   @Input({ required: true }) watchlistId!: number;
 
-  private watchlistService = inject(WatchlistService);
+  private channelService = inject(ChannelService);
 
   searchQuery = new FormControl("");
   isLoading = false;
@@ -51,24 +40,19 @@ export class AddChannelComponent {
     if (!this.searchQuery.value?.trim()) return;
 
     this.isLoading = true;
-    this.watchlistService.searchChannels(this.searchQuery.value).subscribe({
-      next: (results) => {
-        this.searchResults = results;
-        this.isLoading = false;
-      },
-      error: () => {
-        this.isLoading = false;
-      },
-    });
-  }
-
-  addToWatchlist(channel: Channel): void {
-    this.watchlistService
-      .addChannelToWatchlist(this.watchlistId, channel.id)
+    this.channelService
+      .addChannelToWatchlist(this.watchlistId, this.searchQuery.value)
       .subscribe({
         next: () => {
-          this.searchResults = [];
+          toast.success("Channel added to watchlist");
           this.searchQuery.reset();
+          this.isLoading = false;
+        },
+        error: (error) => {
+          toast.error(
+            "Failed to add channel: " + (error.error?.message || "Unknown error")
+          );
+          this.isLoading = false;
         },
       });
   }

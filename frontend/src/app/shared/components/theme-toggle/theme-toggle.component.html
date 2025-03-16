@@ -4,10 +4,11 @@
   size="icon"
   (click)="toggleTheme()"
   aria-label="Toggle theme"
+  class="size-8"
 >
   <ng-icon
     hlm
     [name]="effectiveTheme() === 'dark' ? 'lucideSun' : 'lucideMoon'"
-    size="20px"
+    size="16px"
   />
 </button>

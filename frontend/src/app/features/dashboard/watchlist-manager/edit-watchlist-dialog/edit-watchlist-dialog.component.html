@@ -1,0 +1,136 @@
+<hlm-dialog>
+  <!-- Dialog Trigger Button -->
+  <button
+    brnDialogTrigger
+    hlmBtn
+    variant="outline"
+    size="icon"
+    class="h-9 w-9"
+    [disabled]="disabled"
+  >
+    <lucide-angular
+      [img]="editIcon"
+      class="w-4 h-4"
+    ></lucide-angular>
+  </button>
+
+  <!-- Dialog Content -->
+  <hlm-dialog-content
+    class="sm:max-w-[400px]"
+    *brnDialogContent="let ctx"
+  >
+    <hlm-dialog-header>
+      <h3 hlmDialogTitle>Edit Watchlist</h3>
+      <p hlmDialogDescription>Make changes to your watchlist settings.</p>
+    </hlm-dialog-header>
+
+    <!-- Form -->
+    <div
+      class="py-2 space-y-4"
+      [formGroup]="editForm"
+    >
+      <!-- Name Field -->
+      <div class="space-y-2">
+        <label
+          for="edit-name"
+          class="text-sm font-medium block"
+        >
+          Name
+        </label>
+        <input
+          hlmInput
+          id="edit-name"
+          formControlName="name"
+          type="text"
+          placeholder="Watchlist name"
+          class="w-full"
+        />
+      </div>
+
+      <!-- Description Field -->
+      <div class="space-y-2">
+        <label
+          for="edit-description"
+          class="text-sm font-medium block"
+        >
+          Description (optional)
+        </label>
+        <textarea
+          hlmInput
+          id="edit-description"
+          formControlName="description"
+          placeholder="Description"
+          class="w-full resize-y min-h-[80px]"
+        ></textarea>
+      </div>
+
+      <!-- Color Field -->
+      <div class="space-y-2">
+        <label
+          for="edit-color"
+          class="text-sm font-medium block"
+        >
+          Color
+        </label>
+        <brn-select
+          formControlName="color"
+          class="w-full"
+        >
+          <hlm-select-trigger class="h-10">
+            <hlm-select-value>
+              <div class="flex items-center">
+                <span
+                  class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
+                  [ngStyle]="{
+                    backgroundColor: editForm.get('color')?.value || '#3b82f6',
+                    borderColor: 'hsl(0, 0%, 20%)'
+                  }"
+                ></span>
+                {{ getColorLabel(editForm.get("color")?.value || "#3b82f6") }}
+              </div>
+            </hlm-select-value>
+          </hlm-select-trigger>
+          <hlm-select-content>
+            <div class="max-h-[300px] overflow-auto">
+              @for (color of colorOptions; track color.value) {
+              <hlm-option
+                [value]="color.value"
+                class="relative flex items-center justify-between rounded-sm py-1.5 pl-2 pr-8 text-sm"
+              >
+                <div class="flex items-center">
+                  <span
+                    class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
+                    [ngStyle]="{
+                      backgroundColor: color.value,
+                      borderColor: 'hsl(0, 0%, 20%)'
+                    }"
+                  ></span>
+                  {{ color.label }}
+                </div>
+              </hlm-option>
+              }
+            </div>
+          </hlm-select-content>
+        </brn-select>
+      </div>
+    </div>
+
+    <!-- Dialog Footer -->
+    <hlm-dialog-footer class="mt-2">
+      <button
+        hlmBtn
+        variant="outline"
+        (click)="ctx.close()"
+      >
+        Cancel
+      </button>
+      <button
+        hlmBtn
+        (click)="updateWatchlist(ctx)"
+        [disabled]="!editForm.valid"
+      >
+        Save
+      </button>
+    </hlm-dialog-footer>
+  </hlm-dialog-content>
+</hlm-dialog>

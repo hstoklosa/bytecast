@@ -32,16 +32,18 @@
                 @for (watchlist of watchlists(); track watchlist.id) {
                 <hlm-option
                   [value]="watchlist.id"
-                  class="relative flex items-center rounded-sm py-1.5 pl-8 pr-2 text-sm"
+                  class="relative flex items-center justify-between rounded-sm py-1.5 pl-2 pr-8 text-sm"
                 >
-                  <span
-                    class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
-                    [ngStyle]="{
-                      backgroundColor: watchlist.color,
-                      borderColor: 'hsl(0, 0%, 20%)'
-                    }"
-                  ></span>
-                  {{ watchlist.name }}
+                  <div class="flex items-center">
+                    <span
+                      class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
+                      [ngStyle]="{
+                        backgroundColor: watchlist.color,
+                        borderColor: 'hsl(0, 0%, 20%)'
+                      }"
+                    ></span>
+                    {{ watchlist.name }}
+                  </div>
                 </hlm-option>
                 }
               </div>
@@ -49,20 +51,12 @@
           </brn-select>
         </div>
 
-        <!-- Edit Button -->
-        <button
-          hlmBtn
-          variant="outline"
-          size="icon"
-          class="h-9 w-9"
-          (click)="startEditing()"
+        <!-- Edit Watchlist Dialog -->
+        <app-edit-watchlist-dialog
+          [watchlist]="activeWatchlist()"
           [disabled]="!selectedWatchlistId()"
-        >
-          <lucide-angular
-            [img]="editIcon"
-            class="w-4 h-4"
-          ></lucide-angular>
-        </button>
+          (watchlistUpdated)="onWatchlistUpdated()"
+        ></app-edit-watchlist-dialog>
 
         <!-- Delete Button with Confirmation Dialog -->
         <app-confirmation-dialog
@@ -84,177 +78,39 @@
         </app-confirmation-dialog>
       </div>
 
-      <!-- New Watchlist Button -->
-      @if (!isCreating()) {
-      <button
-        hlmBtn
-        size="sm"
-        (click)="startCreating()"
-      >
-        <lucide-angular
-          [img]="plusIcon"
-          class="w-4 h-4 mr-2"
-        ></lucide-angular>
-        New Watchlist
-      </button>
-      }
+      <!-- New Watchlist Dialog -->
+      <app-create-watchlist-dialog
+        (watchlistCreated)="onWatchlistCreated()"
+      ></app-create-watchlist-dialog>
     </div>
-
-    <!-- Create Watchlist Form -->
-    @if (isCreating()) {
-    <div
-      class="space-y-3 border rounded-md p-3 mb-4"
-      [formGroup]="createForm"
-    >
-      <h3 class="font-medium">Create New Watchlist</h3>
-      <div class="flex items-center space-x-2">
-        <input
-          hlmInput
-          formControlName="name"
-          type="text"
-          placeholder="Watchlist name"
-          class="flex-1"
-        />
-        <brn-select formControlName="color">
-          <hlm-select-trigger class="w-[120px]">
-            <hlm-select-value>
-              <div class="flex items-center">
-                <span
-                  class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
-                  [ngStyle]="{
-                    backgroundColor: createForm.get('color')?.value || '#3b82f6',
-                    borderColor: 'hsl(0, 0%, 20%)'
-                  }"
-                ></span>
-                {{ getColorLabel(createForm.get("color")?.value || "#3b82f6") }}
-              </div>
-            </hlm-select-value>
-          </hlm-select-trigger>
-          <hlm-select-content>
-            <div class="max-h-[300px] overflow-auto">
-              @for (color of colorOptions; track color.value) {
-              <hlm-option
-                [value]="color.value"
-                class="relative flex items-center rounded-sm py-1.5 pl-8 pr-2 text-sm"
-              >
-                <span
-                  class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
-                  [ngStyle]="{
-                    backgroundColor: color.value,
-                    borderColor: 'hsl(0, 0%, 20%)'
-                  }"
-                ></span>
-                {{ color.label }}
-              </hlm-option>
-              }
-            </div>
-          </hlm-select-content>
-        </brn-select>
-      </div>
-      <div class="flex justify-end space-x-2">
-        <button
-          hlmBtn
-          variant="outline"
-          size="sm"
-          (click)="cancelCreate()"
-        >
-          Cancel
-        </button>
-        <button
-          hlmBtn
-          size="sm"
-          (click)="createWatchlist()"
-          [disabled]="!createForm.valid"
-        >
-          Create
-        </button>
-      </div>
-    </div>
-    }
-
-    <!-- Edit Watchlist Form -->
-    @if (isEditing()) {
-    <div
-      class="space-y-3 border rounded-md p-3 mb-4"
-      [formGroup]="editForm"
-    >
-      <h3 class="font-medium">Edit Watchlist</h3>
-      <div class="flex items-center space-x-2">
-        <input
-          hlmInput
-          formControlName="name"
-          type="text"
-          placeholder="Watchlist name"
-          class="flex-1"
-        />
-        <brn-select formControlName="color">
-          <hlm-select-trigger class="w-[120px]">
-            <hlm-select-value>
-              <div class="flex items-center">
-                <span
-                  class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
-                  [ngStyle]="{
-                    backgroundColor: editForm.get('color')?.value || '#3b82f6',
-                    borderColor: 'hsl(0, 0%, 20%)'
-                  }"
-                ></span>
-                {{ getColorLabel(editForm.get("color")?.value || "#3b82f6") }}
-              </div>
-            </hlm-select-value>
-          </hlm-select-trigger>
-          <hlm-select-content>
-            <div class="max-h-[300px] overflow-auto">
-              @for (color of colorOptions; track color.value) {
-              <hlm-option
-                [value]="color.value"
-                class="relative flex items-center rounded-sm py-1.5 pl-8 pr-2 text-sm"
-              >
-                <span
-                  class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
-                  [ngStyle]="{
-                    backgroundColor: color.value,
-                    borderColor: 'hsl(0, 0%, 20%)'
-                  }"
-                ></span>
-                {{ color.label }}
-              </hlm-option>
-              }
-            </div>
-          </hlm-select-content>
-        </brn-select>
-      </div>
-      <div class="flex justify-end space-x-2">
-        <button
-          hlmBtn
-          variant="outline"
-          size="sm"
-          (click)="cancelEdit()"
-        >
-          <lucide-angular
-            [img]="xIcon"
-            class="w-4 h-4 mr-2"
-          ></lucide-angular>
-          Cancel
-        </button>
-        <button
-          hlmBtn
-          size="sm"
-          (click)="saveEdit()"
-          [disabled]="!editForm.valid"
-        >
-          <lucide-angular
-            [img]="checkIcon"
-            class="w-4 h-4 mr-2"
-          ></lucide-angular>
-          Save
-        </button>
-      </div>
-    </div>
-    }
 
     <!-- Add Channel Component -->
     @if (selectedWatchlistId()) {
     <app-add-channel [watchlistId]="selectedWatchlistId()!" />
+
+    <!-- Channel Grid -->
+    <div class="mt-6">
+      <h3 class="text-lg font-medium mb-4">Channels</h3>
+
+      @if (channels().length === 0) {
+      <div class="text-center py-8 text-muted-foreground">
+        <p>No channels in this watchlist yet.</p>
+        <p class="text-sm mt-1">
+          Search for channels above to add them to your watchlist.
+        </p>
+      </div>
+      } @else {
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        @for (channel of channels(); track channel.id) {
+        <app-channel-card
+          [channel]="channel"
+          [watchlistId]="selectedWatchlistId()!"
+          (channelRemoved)="onChannelRemoved()"
+        ></app-channel-card>
+        }
+      </div>
+      }
+    </div>
     }
   </div>
 </div>

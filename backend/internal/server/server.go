@@ -15,8 +15,8 @@ import (
 	"bytecast/api/handler"
 	"bytecast/api/middleware"
 	"bytecast/configs"
-	"bytecast/internal/services"
 	"bytecast/internal/database"
+	"bytecast/internal/services"
 )
 
 // Server represents the HTTP server and its dependencies
@@ -44,7 +44,7 @@ func (s *Server) Start() error {
     db := s.db.DB()
 
     // Initialize services
-    watchlistService := services.NewWatchlistService(db)
+    watchlistService := services.NewWatchlistService(db, s.cfg)
     authService := services.NewAuthService(db, watchlistService, s.cfg.JWT.Secret)
 
     // Initialize route handlers

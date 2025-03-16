@@ -10,8 +10,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
 	"bytecast/api/handler"
@@ -20,6 +21,21 @@ import (
 	"bytecast/internal/models"
 	"bytecast/internal/services"
 )
+
+// TestWatchlist is a test-specific version of the Watchlist model without the check constraint
+type TestWatchlist struct {
+	gorm.Model
+	UserID      uint   `gorm:"index;not null"`
+	Name        string `gorm:"size:255;not null"`
+	Description string `gorm:"type:text"`
+	Color       string `gorm:"size:7;not null"`
+	Channels    []*models.Channel `gorm:"many2many:watchlist_channels;foreignKey:ID;joinForeignKey:WatchlistID;References:ID;joinReferences:ChannelID"`
+}
+
+// TableName specifies the table name for the TestWatchlist model
+func (TestWatchlist) TableName() string {
+	return "watchlists"
+}
 
 type watchlistTestServer struct {
 	db               *gorm.DB
@@ -30,17 +46,13 @@ type watchlistTestServer struct {
 }
 
 func setupWatchlistTestServer(t *testing.T) *watchlistTestServer {
-	dsn := "host=localhost user=postgres password=bytecast dbname=bytecast_test port=5433 sslmode=disable"
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("Failed to connect to test database: %v", err)
 	}
 
-	// Clean up existing tables
-	db.Exec("DROP TABLE IF EXISTS watchlist_channels, channels, watchlists, revoked_tokens, users CASCADE")
-
-	// Run migrations for all models
-	if err := db.AutoMigrate(&models.User{}, &models.RevokedToken{}, &models.Channel{}, &models.Watchlist{}); err != nil {
+	// Run migrations for all models except Watchlist
+	if err := db.AutoMigrate(&models.User{}, &models.RevokedToken{}, &models.Channel{}, &TestWatchlist{}); err != nil {
 		t.Fatalf("Failed to run migrations: %v", err)
 	}
 
@@ -72,11 +84,14 @@ func setupWatchlistTestServer(t *testing.T) *watchlistTestServer {
 		JWT: configs.JWT{
 			Secret: "test-secret",
 		},
+		YouTube: configs.YouTube{
+			APIKey: "test-api-key",
+		},
 	}
 
 	// Initialize services
-	authService := services.NewAuthService(db, cfg.JWT.Secret)
-	watchlistService := services.NewWatchlistService(db)
+	watchlistService := services.NewWatchlistService(db, cfg)
+	authService := services.NewAuthService(db, watchlistService, cfg.JWT.Secret)
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService, cfg)
@@ -138,10 +153,16 @@ func TestCreateWatchlist(t *testing.T) {
 	server := setupWatchlistTestServer(t)
 	token := getAuthTokenForTest(t, server)
 
+	// Create a test watchlist directly through the service
+	watchlist, err := server.watchlistService.CreateWatchlist(server.testUserID, "Test Watchlist", "Test Description", "#FF5733")
+	require.NoError(t, err)
+	require.NotNil(t, watchlist)
+
 	// Test creating a watchlist
 	watchlistBody := map[string]string{
 		"name":        "My Test Watchlist",
 		"description": "A watchlist for testing",
+		"color":       "#FF5733",
 	}
 	watchlistJSON, err := json.Marshal(watchlistBody)
 	if err != nil {
@@ -176,7 +197,7 @@ func TestGetWatchlists(t *testing.T) {
 	token := getAuthTokenForTest(t, server)
 
 	// Create a watchlist directly through the service
-	watchlist, err := server.watchlistService.CreateWatchlist(server.testUserID, "Test Watchlist", "Test Description")
+	watchlist, err := server.watchlistService.CreateWatchlist(server.testUserID, "Test Watchlist", "Test Description", "#FF5733")
 	if err != nil {
 		t.Fatalf("Failed to create test watchlist: %v", err)
 	}
@@ -212,11 +233,14 @@ func TestAddChannelToWatchlist(t *testing.T) {
 	server := setupWatchlistTestServer(t)
 	token := getAuthTokenForTest(t, server)
 
-	// Create a watchlist directly through the service
-	watchlist, err := server.watchlistService.CreateWatchlist(server.testUserID, "Test Watchlist", "Test Description")
-	if err != nil {
-		t.Fatalf("Failed to create test watchlist: %v", err)
-	}
+	// Create a test watchlist
+	watchlist, err := server.watchlistService.CreateWatchlist(server.testUserID, "Test Watchlist", "Test Description", "#FF5733")
+	require.NoError(t, err)
+	require.NotNil(t, watchlist)
+
+	// Create a mock YouTube service for testing
+	mockYouTube := &MockYouTubeService{}
+	server.watchlistService.SetYouTubeService(mockYouTube)
 
 	// Test adding a channel to the watchlist
 	channelBody := map[string]string{
@@ -254,4 +278,23 @@ func TestAddChannelToWatchlist(t *testing.T) {
 	
 	firstChannel := channels[0].(map[string]interface{})
 	assert.Equal(t, "UC_x5XG1OV2P6uZZ5FSM9Ttw", firstChannel["youtube_id"])
+}
+
+// MockYouTubeService is a mock implementation of the YouTube service for testing
+type MockYouTubeService struct{}
+
+// GetChannelInfo is a mock implementation that returns predefined channel info
+func (m *MockYouTubeService) GetChannelInfo(channelID string) (*services.ChannelInfo, error) {
+	// Return error for invalid channel IDs
+	if channelID == "invalid/format" || channelID == "" {
+		return nil, services.ErrInvalidYouTubeURL
+	}
+	
+	// Return mock channel info
+	return &services.ChannelInfo{
+		ID:          channelID,
+		Title:       "Mock Channel " + channelID,
+		Description: "This is a mock channel for testing",
+		Thumbnail:   "https://example.com/thumbnail.jpg",
+	}, nil
 }

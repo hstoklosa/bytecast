@@ -1,52 +1,53 @@
 package handler
 
 import (
-"net/http"
-"regexp"
-"strconv"
+	"fmt"
+	"net/http"
+	"regexp"
+	"strconv"
 
-"github.com/gin-gonic/gin"
-"github.com/gin-gonic/gin/binding"
-"github.com/go-playground/validator/v10"
+	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 
-"bytecast/internal/models"
-"bytecast/internal/services"
+	"bytecast/internal/models"
+	"bytecast/internal/services"
 )
 
 // Request and response structs
 type createWatchlistRequest struct {
-Name        string `json:"name" binding:"required,min=1,max=255"`
-Description string `json:"description"`
-Color       string `json:"color" binding:"required,hexcolor"`
+	Name        string `json:"name" binding:"required,min=1,max=255"`
+	Description string `json:"description"`
+	Color       string `json:"color" binding:"required,hexcolor"`
 }
 
 type updateWatchlistRequest struct {
-Name        string `json:"name" binding:"required,min=1,max=255"`
-Description string `json:"description"`
-Color       string `json:"color" binding:"required,hexcolor"`
+	Name        string `json:"name" binding:"required,min=1,max=255"`
+	Description string `json:"description"`
+	Color       string `json:"color" binding:"required,hexcolor"`
 }
 
 type addChannelRequest struct {
-ChannelID string `json:"channel_id" binding:"required"` // Can be URL or ID
+	ChannelID string `json:"channel_id" binding:"required"` // Can be URL or ID
 }
 
 type watchlistResponse struct {
-ID          uint   `json:"id"`
-Name        string `json:"name"`
-Description string `json:"description"`
-Color       string `json:"color"`
-CreatedAt   string `json:"created_at"`
-UpdatedAt   string `json:"updated_at"`
+	ID          uint   `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Color       string `json:"color"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }
 
 func init() {
-if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
-v.RegisterValidation("hexcolor", validateHexColor)
-}
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		v.RegisterValidation("hexcolor", validateHexColor)
+	}
 }
 
 func validateHexColor(fl validator.FieldLevel) bool {
-return regexp.MustCompile(`^#[a-fA-F0-9]{6}$`).MatchString(fl.Field().String())
+	return regexp.MustCompile(`^#[a-fA-F0-9]{6}$`).MatchString(fl.Field().String())
 }
 
 type channelResponse struct {
@@ -261,8 +262,12 @@ func (h *WatchlistHandler) addChannel(c *gin.Context) {
 			h.errorResponse(c, http.StatusNotFound, "Watchlist not found")
 		case services.ErrInvalidYouTubeID:
 			h.errorResponse(c, http.StatusBadRequest, "Invalid YouTube channel ID or URL")
+		case services.ErrYouTubeAPIError:
+			h.errorResponse(c, http.StatusServiceUnavailable, "YouTube API service is currently unavailable")
+		case services.ErrMissingAPIKey:
+			h.errorResponse(c, http.StatusServiceUnavailable, "YouTube API key is not configured. Please add a YouTube API key to your environment variables.")
 		default:
-			h.errorResponse(c, http.StatusInternalServerError, "Failed to add channel to watchlist")
+			h.errorResponse(c, http.StatusInternalServerError, fmt.Sprintf("Failed to add channel to watchlist: %v", err))
 		}
 		return
 	}
@@ -340,14 +345,14 @@ func (h *WatchlistHandler) removeChannel(c *gin.Context) {
 
 // Helper functions to convert models to response structs
 func watchlistToResponse(watchlist *models.Watchlist) watchlistResponse {
-return watchlistResponse{
-ID:          watchlist.ID,
-Name:        watchlist.Name,
-Description: watchlist.Description,
-Color:       watchlist.Color,
-CreatedAt:   watchlist.CreatedAt.Format("2006-01-02T15:04:05Z"),
-UpdatedAt:   watchlist.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-}
+	return watchlistResponse{
+		ID:          watchlist.ID,
+		Name:        watchlist.Name,
+		Description: watchlist.Description,
+		Color:       watchlist.Color,
+		CreatedAt:   watchlist.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:   watchlist.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+	}
 }
 
 func channelToResponse(channel *models.Channel) channelResponse {

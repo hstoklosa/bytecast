@@ -1,9 +1,10 @@
 export interface Channel {
-  id: string;
+  id: number;
+  youtube_id: string;
   title: string;
   description: string;
-  thumbnailUrl: string;
-  subscriberCount: string;
+  thumbnail_url: string;
+  custom_name?: string;
 }
 
 export interface Watchlist {
@@ -25,4 +26,8 @@ export interface UpdateWatchlistDTO {
   name: string;
   description?: string;
   color: string;
+}
+
+export interface AddChannelDTO {
+  channel_id: string;
 }

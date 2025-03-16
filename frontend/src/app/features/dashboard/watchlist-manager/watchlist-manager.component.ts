@@ -7,7 +7,7 @@ import {
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormBuilder, ReactiveFormsModule, Validators } from "@angular/forms";
-import { WatchlistService } from "../../../core/services/watchlist.service";
+import { WatchlistService, ChannelService } from "../../../core/services";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { BrnSelectImports } from "@spartan-ng/brain/select";
 import { HlmSelectImports } from "@spartan-ng/ui-select-helm";
@@ -20,9 +20,12 @@ import {
 import { HlmBadgeDirective } from "@spartan-ng/ui-badge-helm";
 import { AddChannelComponent } from "../add-channel/add-channel.component";
 import { toast } from "ngx-sonner";
-import { LucideAngularModule, Edit, Trash2, Plus, Check, X } from "lucide-angular";
+import { LucideAngularModule, Trash2, Plus } from "lucide-angular";
 import { ColorOption } from "./watchlist-manager.interface";
 import { ConfirmationDialogComponent } from "../../../shared/components";
+import { CreateWatchlistDialogComponent } from "./create-watchlist-dialog/create-watchlist-dialog.component";
+import { EditWatchlistDialogComponent } from "./edit-watchlist-dialog/edit-watchlist-dialog.component";
+import { ChannelCardComponent } from "./channel-card";
 
 @Component({
   selector: "app-watchlist-manager",
@@ -40,24 +43,25 @@ import { ConfirmationDialogComponent } from "../../../shared/components";
     AddChannelComponent,
     LucideAngularModule,
     ConfirmationDialogComponent,
+    CreateWatchlistDialogComponent,
+    EditWatchlistDialogComponent,
+    ChannelCardComponent,
   ],
   templateUrl: "./watchlist-manager.component.html",
   styleUrls: ["./watchlist-manager.component.css"],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class WatchlistManagerComponent {
-  readonly editIcon = Edit;
   readonly trashIcon = Trash2;
   readonly plusIcon = Plus;
-  readonly checkIcon = Check;
-  readonly xIcon = X;
   private fb = inject(FormBuilder);
   private watchlistService = inject(WatchlistService);
+  private channelService = inject(ChannelService);
 
   // State signals
   readonly watchlists = this.watchlistService.watchlists;
+  readonly channels = this.watchlistService.channels;
   readonly selectedWatchlistId = signal<number | null>(null);
-  readonly isCreating = signal(false);
   readonly isEditing = signal(false);
 
   // Computed signal for the active watchlist
@@ -70,16 +74,6 @@ export class WatchlistManagerComponent {
   // Form controls
   watchlistForm = this.fb.group({
     selectedWatchlist: [null as number | null],
-  });
-
-  createForm = this.fb.group({
-    name: ["", [Validators.required, Validators.minLength(1)]],
-    color: ["#3b82f6", [Validators.required]],
-  });
-
-  editForm = this.fb.group({
-    name: ["", [Validators.required, Validators.minLength(1)]],
-    color: ["#3b82f6", [Validators.required]],
   });
 
   // Color options with hex values
@@ -163,87 +157,15 @@ export class WatchlistManagerComponent {
     }
   }
 
-  // Create Operations
-  startCreating(): void {
-    this.isCreating.set(true);
-    this.createForm.reset({ name: "", color: "#3b82f6" });
+  // Handle watchlist created/updated events
+  onWatchlistCreated(): void {
+    // Refresh watchlists
+    this.watchlistService.refreshWatchlists().subscribe();
   }
 
-  cancelCreate(): void {
-    this.isCreating.set(false);
-    this.createForm.reset();
-  }
-
-  createWatchlist(): void {
-    if (this.createForm.valid) {
-      const { name, color } = this.createForm.value;
-      this.watchlistService
-        .createWatchlist({ name: name!, color: color! })
-        .subscribe({
-          next: (newWatchlist) => {
-            this.selectedWatchlistId.set(newWatchlist.id);
-            this.watchlistService.setActiveWatchlist(newWatchlist);
-            this.isCreating.set(false);
-            this.createForm.reset();
-          },
-          error: () => {
-            toast.error("Failed to create watchlist");
-          },
-        });
-    }
-  }
-
-  // Edit Operations
-  startEditing(): void {
-    const selectedId = this.selectedWatchlistId();
-    if (!selectedId) return;
-
-    const watchlist = this.watchlists()?.find((w) => w.id === selectedId);
-    if (watchlist) {
-      this.editForm.patchValue({
-        name: watchlist.name,
-        color: watchlist.color,
-      });
-      this.isEditing.set(true);
-    }
-  }
-
-  cancelEdit(): void {
-    this.isEditing.set(false);
-    this.editForm.reset();
-  }
-
-  saveEdit(): void {
-    const selectedId = this.selectedWatchlistId();
-    if (!selectedId || !this.editForm.valid) return;
-
-    const { name, color } = this.editForm.value;
-    this.watchlistService
-      .updateWatchlist(selectedId, { name: name!, color: color! })
-      .subscribe({
-        next: () => {
-          this.isEditing.set(false);
-          this.editForm.reset();
-        },
-        error: () => {
-          toast.error("Failed to update watchlist");
-        },
-      });
-  }
-
-  // Delete Operation
-  deleteWatchlist(): void {
-    const selectedId = this.selectedWatchlistId();
-    if (!selectedId) return;
-
-    // Don't allow deleting the last watchlist
-    if (this.watchlists()?.length <= 1) {
-      toast.error("You must have at least one watchlist");
-      return;
-    }
-
-    const watchlist = this.watchlists()?.find((w) => w.id === selectedId);
-    if (!watchlist) return;
+  onWatchlistUpdated(): void {
+    // Refresh watchlists
+    this.watchlistService.refreshWatchlists().subscribe();
   }
 
   /**
@@ -281,6 +203,25 @@ export class WatchlistManagerComponent {
       },
       error: () => {
         toast.error("Failed to delete watchlist");
+      },
+    });
+  }
+
+  // Handle channel removed event
+  onChannelRemoved(): void {
+    const watchlistId = this.selectedWatchlistId();
+    if (watchlistId) {
+      this.refreshChannels(watchlistId);
+    }
+  }
+
+  private refreshChannels(watchlistId: number): void {
+    this.channelService.getChannelsInWatchlist(watchlistId).subscribe({
+      next: (channels) => {
+        // The channels will be updated through the watchlistService
+      },
+      error: () => {
+        toast.error("Failed to refresh channels");
       },
     });
   }

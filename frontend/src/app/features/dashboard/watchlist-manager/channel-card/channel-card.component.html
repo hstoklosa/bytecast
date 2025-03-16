@@ -1,0 +1,63 @@
+<div
+  hlmCard
+  class="channel-card"
+>
+  <div hlmCardHeader>
+    <div class="flex items-center space-x-3">
+      <img
+        [src]="channel.thumbnail_url"
+        [alt]="getDisplayName()"
+        class="h-12 w-12 rounded-full object-cover"
+      />
+      <div>
+        <h3
+          hlmCardTitle
+          class="text-base"
+        >
+          {{ getDisplayName() }}
+        </h3>
+      </div>
+    </div>
+  </div>
+
+  <div hlmCardContent>
+    <p class="text-sm text-muted-foreground">{{ getTruncatedDescription() }}</p>
+  </div>
+
+  <div
+    hlmCardFooter
+    class="flex justify-between"
+  >
+    <a
+      [href]="getChannelUrl()"
+      target="_blank"
+      rel="noopener noreferrer"
+      hlmBtn
+      variant="outline"
+      size="sm"
+    >
+      <lucide-angular
+        [img]="externalLinkIcon"
+        class="mr-2 h-4 w-4"
+      ></lucide-angular>
+      Visit
+    </a>
+
+    <app-confirmation-dialog
+      triggerText=""
+      triggerVariant="outline"
+      triggerClass="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+      title="Remove Channel"
+      description="Are you sure you want to remove this channel from the watchlist?"
+      confirmText="Remove"
+      confirmVariant="destructive"
+      cancelText="Cancel"
+      (confirmed)="removeChannel()"
+    >
+      <lucide-angular
+        [img]="trashIcon"
+        class="w-4 h-4"
+      ></lucide-angular>
+    </app-confirmation-dialog>
+  </div>
+</div>

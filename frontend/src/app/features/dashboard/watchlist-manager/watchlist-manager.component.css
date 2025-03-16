@@ -1,3 +1,17 @@
 :host {
   display: block;
 }
+
+/* Custom styles for the component */
+
+/* Move check mark to the right side in select options */
+::ng-deep hlm-option span[data-state] {
+  left: auto !important;
+  right: 8px !important;
+}
+
+/* Adjust padding for the options to accommodate the right-positioned check mark */
+::ng-deep hlm-option {
+  padding-left: 12px !important;
+  padding-right: 32px !important;
+}
