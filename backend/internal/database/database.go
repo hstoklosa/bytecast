@@ -1,15 +1,15 @@
 package database
 
 import (
-    "fmt"
-    "time"
+	"fmt"
+	"time"
 
-    "golang.org/x/crypto/bcrypt"
-    "gorm.io/driver/postgres"
-    "gorm.io/gorm"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 
-    "bytecast/configs"
-    "bytecast/internal/models"
+	"bytecast/configs"
+	"bytecast/internal/models"
 )
 
 // Connection holds the database connection and configuration
@@ -44,7 +44,18 @@ func (c *Connection) DB() *gorm.DB {
 
 // RunMigrations executes all database migrations and ensures superuser exists
 func (c *Connection) RunMigrations() error {
-    // Start a transaction
+    // First, run the migrations to create tables if they don't exist
+    // This is done outside of a transaction to ensure tables are created
+    if err := c.db.AutoMigrate(
+        &models.User{},
+        &models.RevokedToken{},
+        &models.Channel{},
+        &models.Watchlist{},
+    ); err != nil {
+        return fmt.Errorf("failed to run migrations: %w", err)
+    }
+
+    // Now start a transaction for the rest of the operations
     tx := c.db.Begin()
     if tx.Error != nil {
         return fmt.Errorf("failed to begin transaction: %w", tx.Error)
@@ -82,24 +93,17 @@ func (c *Connection) RunMigrations() error {
         }
     }
 
-    // Run other migrations
-    if err := tx.AutoMigrate(
-        &models.User{},
-        &models.RevokedToken{},
-        &models.Channel{},
-        &models.Watchlist{},
-    ); err != nil {
-        tx.Rollback()
-        return fmt.Errorf("failed to run migrations: %w", err)
+    // Commit the transaction for color column changes
+    if err := tx.Commit().Error; err != nil {
+        return fmt.Errorf("failed to commit color column changes: %w", err)
     }
 
-    // Create superuser if it doesn't exist
+    // Create superuser if it doesn't exist (outside of the previous transaction)
     if err := c.ensureSuperuser(); err != nil {
-        tx.Rollback()
         return fmt.Errorf("failed to ensure superuser exists: %w", err)
     }
 
-    return tx.Commit().Error
+    return nil
 }
 
 // ensureSuperuser creates the superuser if it doesn't already exist

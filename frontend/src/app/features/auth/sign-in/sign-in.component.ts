@@ -15,7 +15,9 @@ import { HlmInputDirective } from "@spartan-ng/ui-input-helm";
 import { HlmLabelDirective } from "@spartan-ng/ui-label-helm";
 import { HlmSpinnerComponent } from "@spartan-ng/ui-spinner-helm";
 import { HlmToasterComponent } from "@spartan-ng/ui-sonner-helm";
-import { AuthService } from "../../../core/auth/auth.service";
+
+import { AuthService } from "../../../core/services";
+import { AuthLayoutComponent } from "../../../layout";
 
 @Component({
   selector: "app-sign-in",
@@ -32,17 +34,18 @@ import { AuthService } from "../../../core/auth/auth.service";
     HlmLabelDirective,
     HlmSpinnerComponent,
     HlmToasterComponent,
+    AuthLayoutComponent,
   ],
 })
 export class SignInComponent {
   private authService = inject(AuthService);
   private router = inject(Router);
-  
+
   signInForm: FormGroup;
   submitted = false;
   isLoading = false;
   error: string | null = null;
-  
+
   focusedFields: { [key: string]: boolean } = {
     identifier: false,
     password: false,
@@ -77,23 +80,24 @@ export class SignInComponent {
 
     if (this.signInForm.valid) {
       this.isLoading = true;
-      
+
       this.authService.login(this.signInForm.value).subscribe({
         next: () => {
           this.isLoading = false;
-          toast.success('Signed in successfully');
-          this.router.navigate(['/dashboard']);
+          toast.success("Signed in successfully");
+          this.router.navigate(["/dashboard"]);
         },
         error: (error: HttpErrorResponse) => {
           this.isLoading = false;
-          const errorMessage = error.error?.message || 'Sign in failed. Please try again.';
+          const errorMessage =
+            error.error?.message || "Sign in failed. Please try again.";
           toast.error(errorMessage);
-        }
+        },
       });
     } else {
       // Show toast for invalid form
-      toast.error('Please fill all required fields correctly');
-      
+      toast.error("Please fill all required fields correctly");
+
       // Mark invalid fields as touched to show validation errors
       Object.keys(this.signInForm.controls).forEach((key) => {
         const control = this.signInForm.get(key);

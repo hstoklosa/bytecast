@@ -15,8 +15,11 @@ import { HlmInputDirective } from "@spartan-ng/ui-input-helm";
 import { HlmLabelDirective } from "@spartan-ng/ui-label-helm";
 import { HlmSpinnerComponent } from "@spartan-ng/ui-spinner-helm";
 import { HlmToasterComponent } from "@spartan-ng/ui-sonner-helm";
+
 import { passwordMatchValidator } from "./sign-up.validators";
-import { AuthService } from "../../../core/auth/auth.service";
+
+import { AuthService } from "../../../core/services";
+import { AuthLayoutComponent } from "../../../layout";
 
 @Component({
   selector: "app-sign-up",
@@ -33,17 +36,18 @@ import { AuthService } from "../../../core/auth/auth.service";
     HlmLabelDirective,
     HlmSpinnerComponent,
     HlmToasterComponent,
+    AuthLayoutComponent,
   ],
 })
 export class SignUpComponent {
   private authService = inject(AuthService);
   private router = inject(Router);
-  
+
   signUpForm: FormGroup;
   submitted = false;
   isLoading = false;
   error: string | null = null;
-  
+
   focusedFields: { [key: string]: boolean } = {
     username: false,
     email: false,
@@ -56,11 +60,16 @@ export class SignUpComponent {
       {
         username: ["", [Validators.required, Validators.minLength(3)]],
         email: ["", [Validators.required, Validators.email]],
-        password: ["", [
-          Validators.required,
-          Validators.minLength(8),
-          Validators.pattern(/^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&].*$/),
-        ]],
+        password: [
+          "",
+          [
+            Validators.required,
+            Validators.minLength(8),
+            Validators.pattern(
+              /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&].*$/
+            ),
+          ],
+        ],
         confirmPassword: ["", [Validators.required]],
       },
       {
@@ -91,43 +100,45 @@ export class SignUpComponent {
 
     if (this.signUpForm.valid) {
       this.isLoading = true;
-      
+
       const { confirmPassword, ...registrationData } = this.signUpForm.value;
-      
+
       this.authService.register(registrationData).subscribe({
         next: () => {
           this.isLoading = false;
-          toast.success('Account created successfully');
-          this.router.navigate(['/dashboard']);
+          toast.success("Account created successfully");
+          this.router.navigate(["/dashboard"]);
         },
         error: (error: HttpErrorResponse) => {
           this.isLoading = false;
-          const errorMessage = error.error?.message || 'Registration failed. Please try again.';
+          const errorMessage =
+            error.error?.message || "Registration failed. Please try again.";
           toast.error(errorMessage);
 
-          const message = error.error?.message?.toLowerCase() || '';
-          if (message.includes('email')) {
-            this.signUpForm.get('email')?.setErrors({ exists: true });
-          } else if (message.includes('username')) {
-            this.signUpForm.get('username')?.setErrors({ taken: true });
+          const message = error.error?.message?.toLowerCase() || "";
+          if (message.includes("email")) {
+            this.signUpForm.get("email")?.setErrors({ exists: true });
+          } else if (message.includes("username")) {
+            this.signUpForm.get("username")?.setErrors({ taken: true });
           }
-        }
+        },
       });
     } else {
       // Show toast for invalid form
-      let errorMessage = 'Please fill all required fields correctly';
-      
+      let errorMessage = "Please fill all required fields correctly";
+
       // Check for specific validation errors to provide more helpful messages
-      if (this.signUpForm.hasError('passwordMismatch')) {
-        errorMessage = 'Passwords do not match';
-      } else if (this.signUpForm.get('password')?.hasError('pattern')) {
-        errorMessage = 'Password must contain at least one letter, one number, and one special character';
-      } else if (this.signUpForm.get('email')?.hasError('email')) {
-        errorMessage = 'Please enter a valid email address';
+      if (this.signUpForm.hasError("passwordMismatch")) {
+        errorMessage = "Passwords do not match";
+      } else if (this.signUpForm.get("password")?.hasError("pattern")) {
+        errorMessage =
+          "Password must contain at least one letter, one number, and one special character";
+      } else if (this.signUpForm.get("email")?.hasError("email")) {
+        errorMessage = "Please enter a valid email address";
       }
-      
+
       toast.error(errorMessage);
-      
+
       // Mark invalid fields as touched to show validation errors
       Object.keys(this.signUpForm.controls).forEach((key) => {
         const control = this.signUpForm.get(key);

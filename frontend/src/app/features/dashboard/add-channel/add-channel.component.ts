@@ -9,11 +9,12 @@ import {
   HlmCardTitleDirective,
 } from "@spartan-ng/ui-card-helm";
 import { HlmInputDirective } from "@spartan-ng/ui-input-helm";
-import { WatchlistService } from "../../../core/services/watchlist.service";
 import { NgIf } from "@angular/common";
 import { HlmSpinnerComponent } from "@spartan-ng/ui-spinner-helm";
-import { Channel } from "../../../core/services/watchlist.service";
 import { LucideAngularModule, Search, Plus } from "lucide-angular";
+
+import { WatchlistService } from "../../../core/services/watchlist.service";
+import { Channel } from "../../../core/models";
 
 @Component({
   selector: "app-add-channel",

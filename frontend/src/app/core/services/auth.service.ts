@@ -1,35 +1,31 @@
-import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, catchError, map, of, tap, throwError } from 'rxjs';
-import { Router } from '@angular/router';
-import { toast } from 'ngx-sonner';
-
-export interface AuthResponse {
-  access_token: string;
-}
-
-export interface RegisterRequest {
-  email: string;
-  username: string;
-  password: string;
-}
-
-export interface LoginRequest {
-  identifier: string;
-  password: string;
-}
+import { Injectable, inject } from "@angular/core";
+import { HttpClient } from "@angular/common/http";
+import {
+  BehaviorSubject,
+  Observable,
+  catchError,
+  map,
+  of,
+  tap,
+  throwError,
+} from "rxjs";
+import { Router } from "@angular/router";
+import { toast } from "ngx-sonner";
+import { AuthResponse, LoginRequest, RegisterRequest } from "../models/auth.model";
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: "root",
 })
 export class AuthService {
   private http = inject(HttpClient);
   private router = inject(Router);
-  
-  private readonly AUTH_TOKEN_KEY = 'access_token';
-  private readonly API_URL = '/api/v1/auth';
-  
-  private isAuthenticatedSubject = new BehaviorSubject<boolean>(this.hasValidToken());
+
+  private readonly AUTH_TOKEN_KEY = "access_token";
+  private readonly API_URL = "/api/v1/auth";
+
+  private isAuthenticatedSubject = new BehaviorSubject<boolean>(
+    this.hasValidToken()
+  );
   isAuthenticated$ = this.isAuthenticatedSubject.asObservable();
 
   constructor() {
@@ -39,14 +35,15 @@ export class AuthService {
 
   register(data: RegisterRequest): Observable<void> {
     return this.http.post<AuthResponse>(`${this.API_URL}/register`, data).pipe(
-      tap(response => {
+      tap((response) => {
         this.setToken(response.access_token);
         this.isAuthenticatedSubject.next(true);
       }),
       map(() => void 0),
-      catchError(error => {
-        console.error('Registration failed:', error);
-        const errorMessage = error.error?.message || 'Registration failed. Please try again.';
+      catchError((error) => {
+        console.error("Registration failed:", error);
+        const errorMessage =
+          error.error?.message || "Registration failed. Please try again.";
         toast.error(errorMessage);
         return throwError(() => this.handleError(error));
       })
@@ -55,14 +52,15 @@ export class AuthService {
 
   login(data: LoginRequest): Observable<void> {
     return this.http.post<AuthResponse>(`${this.API_URL}/login`, data).pipe(
-      tap(response => {
+      tap((response) => {
         this.setToken(response.access_token);
         this.isAuthenticatedSubject.next(true);
       }),
       map(() => void 0),
-      catchError(error => {
-        console.error('Login failed:', error);
-        const errorMessage = error.error?.message || 'Login failed. Please try again.';
+      catchError((error) => {
+        console.error("Login failed:", error);
+        const errorMessage =
+          error.error?.message || "Login failed. Please try again.";
         toast.error(errorMessage);
         return throwError(() => this.handleError(error));
       })
@@ -74,14 +72,14 @@ export class AuthService {
       tap(() => {
         this.clearToken();
         this.isAuthenticatedSubject.next(false);
-        this.router.navigate(['/']);
+        this.router.navigate(["/"]);
       }),
-      catchError(error => {
-        console.error('Logout failed:', error);
+      catchError((error) => {
+        console.error("Logout failed:", error);
         // Still clear token and redirect even if logout fails
         this.clearToken();
         this.isAuthenticatedSubject.next(false);
-        this.router.navigate(['/']);
+        this.router.navigate(["/"]);
         return of(void 0);
       })
     );
@@ -89,20 +87,21 @@ export class AuthService {
 
   refreshToken(): Observable<void> {
     return this.http.post<AuthResponse>(`${this.API_URL}/refresh`, {}).pipe(
-      tap(response => {
+      tap((response) => {
         this.setToken(response.access_token);
         this.isAuthenticatedSubject.next(true);
       }),
       map(() => void 0),
-      catchError(error => {
-        console.error('Token refresh failed:', error);
+      catchError((error) => {
+        console.error("Token refresh failed:", error);
         if (error.status === 401) {
           this.clearToken();
           this.isAuthenticatedSubject.next(false);
-          this.router.navigate(['/']);
-          toast.error('Your session has expired. Please log in again.');
+          this.router.navigate(["/"]);
+          toast.error("Your session has expired. Please log in again.");
         } else {
-          const errorMessage = error.error?.message || 'Failed to refresh session. Please try again.';
+          const errorMessage =
+            error.error?.message || "Failed to refresh session. Please try again.";
           toast.error(errorMessage);
         }
         return throwError(() => this.handleError(error));
@@ -123,10 +122,10 @@ export class AuthService {
   }
 
   private handleError(error: any): Error {
-    if (error.error && typeof error.error === 'object' && 'error' in error.error) {
+    if (error.error && typeof error.error === "object" && "error" in error.error) {
       return new Error(error.error.error);
     }
-    return new Error('An unexpected error occurred');
+    return new Error("An unexpected error occurred");
   }
 
   private hasValidToken(): boolean {
@@ -135,7 +134,7 @@ export class AuthService {
 
     try {
       // Simple structural validation - check if it's a valid JWT format
-      const [header, payload, signature] = token.split('.');
+      const [header, payload, signature] = token.split(".");
       if (!header || !payload || !signature) return false;
 
       // Check expiration

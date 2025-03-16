@@ -64,20 +64,24 @@
           ></lucide-angular>
         </button>
 
-        <!-- Delete Button -->
-        <button
-          hlmBtn
-          variant="outline"
-          size="icon"
-          class="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
-          (click)="deleteWatchlist()"
+        <!-- Delete Button with Confirmation Dialog -->
+        <app-confirmation-dialog
+          triggerText=""
+          triggerVariant="outline"
+          triggerClass="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
           [disabled]="!selectedWatchlistId()"
+          title="Delete Watchlist"
+          [description]="getDeleteConfirmationMessage()"
+          confirmText="Delete"
+          confirmVariant="destructive"
+          cancelText="Cancel"
+          (confirmed)="onDeleteConfirmed()"
         >
           <lucide-angular
             [img]="trashIcon"
             class="w-4 h-4"
           ></lucide-angular>
-        </button>
+        </app-confirmation-dialog>
       </div>
 
       <!-- New Watchlist Button -->

@@ -8,7 +8,7 @@ import {
 } from "@spartan-ng/ui-tabs-helm";
 import { WatchlistManagerComponent } from "./watchlist-manager/watchlist-manager.component";
 import { WatchlistService } from "../../core/services/watchlist.service";
-import { DashboardLayoutComponent } from "./dashboard-layout.component";
+import { DashboardLayoutComponent } from "../../layout/dashboard-layout/dashboard-layout.component";
 
 @Component({
   selector: "app-dashboard",
