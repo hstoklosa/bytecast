@@ -87,6 +87,30 @@
     <!-- Add Channel Component -->
     @if (selectedWatchlistId()) {
     <app-add-channel [watchlistId]="selectedWatchlistId()!" />
+
+    <!-- Channel Grid -->
+    <div class="mt-6">
+      <h3 class="text-lg font-medium mb-4">Channels</h3>
+
+      @if (channels().length === 0) {
+      <div class="text-center py-8 text-muted-foreground">
+        <p>No channels in this watchlist yet.</p>
+        <p class="text-sm mt-1">
+          Search for channels above to add them to your watchlist.
+        </p>
+      </div>
+      } @else {
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        @for (channel of channels(); track channel.id) {
+        <app-channel-card
+          [channel]="channel"
+          [watchlistId]="selectedWatchlistId()!"
+          (channelRemoved)="onChannelRemoved()"
+        ></app-channel-card>
+        }
+      </div>
+      }
+    </div>
     }
   </div>
 </div>

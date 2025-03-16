@@ -1,8 +1,5 @@
 <div>
-  <form
-    (ngSubmit)="handleSearch()"
-    class="flex w-full items-center space-x-2"
-  >
+  <form class="flex w-full items-center space-x-2">
     <div class="relative flex-1">
       <lucide-angular
         [img]="searchIcon"
@@ -11,58 +8,24 @@
       <input
         [formControl]="searchQuery"
         type="text"
-        placeholder="Search for YouTube channels"
+        placeholder="Enter YouTube channel URL or ID"
         hlmInput
         class="w-full pl-10"
+        (keydown.enter)="$event.preventDefault(); handleSearch()"
       />
     </div>
     <button
       hlmBtn
-      type="submit"
+      type="button"
       [disabled]="isLoading"
+      (click)="handleSearch()"
     >
       <hlm-spinner
         *ngIf="isLoading"
         size="sm"
         class="mr-2"
       />
-      Search
+      Add Channel
     </button>
   </form>
-
-  @if (searchResults.length > 0) {
-  <div class="mt-4 space-y-4">
-    <h3 class="font-medium">Search Results</h3>
-    <div class="space-y-3">
-      @for (channel of searchResults; track channel.id) {
-      <div class="flex items-center justify-between">
-        <div class="flex items-center space-x-3">
-          <img
-            [src]="channel.thumbnailUrl"
-            [alt]="channel.title"
-            class="h-11 w-11 rounded-full object-cover"
-          />
-          <div>
-            <h4 class="font-medium">{{ channel.title }}</h4>
-            <p class="text-sm text-muted-foreground">
-              {{ channel.subscriberCount }} subscribers
-            </p>
-          </div>
-        </div>
-        <button
-          hlmBtn
-          size="sm"
-          (click)="addToWatchlist(channel)"
-        >
-          <lucide-angular
-            [img]="plusIcon"
-            class="mr-2 h-4 w-4"
-          ></lucide-angular>
-          Add
-        </button>
-      </div>
-      }
-    </div>
-  </div>
-  }
 </div>

@@ -59,14 +59,14 @@ import { DashboardLayoutComponent } from "../../layout/dashboard-layout/dashboar
             >
               <div class="flex items-center space-x-3">
                 <img
-                  [src]="channel.thumbnailUrl"
+                  [src]="channel.thumbnail_url"
                   [alt]="channel.title"
                   class="h-11 w-11 rounded-full object-cover"
                 />
                 <div>
                   <h4 class="font-medium">{{ channel.title }}</h4>
                   <p class="text-sm text-muted-foreground">
-                    {{ channel.subscriberCount }} subscribers
+                    {{ channel.title }}
                   </p>
                 </div>
               </div>

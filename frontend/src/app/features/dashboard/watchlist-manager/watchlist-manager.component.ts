@@ -7,7 +7,7 @@ import {
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormBuilder, ReactiveFormsModule, Validators } from "@angular/forms";
-import { WatchlistService } from "../../../core/services/watchlist.service";
+import { WatchlistService, ChannelService } from "../../../core/services";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { BrnSelectImports } from "@spartan-ng/brain/select";
 import { HlmSelectImports } from "@spartan-ng/ui-select-helm";
@@ -25,6 +25,7 @@ import { ColorOption } from "./watchlist-manager.interface";
 import { ConfirmationDialogComponent } from "../../../shared/components";
 import { CreateWatchlistDialogComponent } from "./create-watchlist-dialog/create-watchlist-dialog.component";
 import { EditWatchlistDialogComponent } from "./edit-watchlist-dialog/edit-watchlist-dialog.component";
+import { ChannelCardComponent } from "./channel-card";
 
 @Component({
   selector: "app-watchlist-manager",
@@ -44,6 +45,7 @@ import { EditWatchlistDialogComponent } from "./edit-watchlist-dialog/edit-watch
     ConfirmationDialogComponent,
     CreateWatchlistDialogComponent,
     EditWatchlistDialogComponent,
+    ChannelCardComponent,
   ],
   templateUrl: "./watchlist-manager.component.html",
   styleUrls: ["./watchlist-manager.component.css"],
@@ -54,9 +56,11 @@ export class WatchlistManagerComponent {
   readonly plusIcon = Plus;
   private fb = inject(FormBuilder);
   private watchlistService = inject(WatchlistService);
+  private channelService = inject(ChannelService);
 
   // State signals
   readonly watchlists = this.watchlistService.watchlists;
+  readonly channels = this.watchlistService.channels;
   readonly selectedWatchlistId = signal<number | null>(null);
   readonly isEditing = signal(false);
 
@@ -199,6 +203,25 @@ export class WatchlistManagerComponent {
       },
       error: () => {
         toast.error("Failed to delete watchlist");
+      },
+    });
+  }
+
+  // Handle channel removed event
+  onChannelRemoved(): void {
+    const watchlistId = this.selectedWatchlistId();
+    if (watchlistId) {
+      this.refreshChannels(watchlistId);
+    }
+  }
+
+  private refreshChannels(watchlistId: number): void {
+    this.channelService.getChannelsInWatchlist(watchlistId).subscribe({
+      next: (channels) => {
+        // The channels will be updated through the watchlistService
+      },
+      error: () => {
+        toast.error("Failed to refresh channels");
       },
     });
   }
