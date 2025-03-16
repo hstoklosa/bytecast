@@ -109,51 +109,62 @@
       [formGroup]="createForm"
     >
       <h3 class="font-medium">Create New Watchlist</h3>
-      <div class="flex items-center space-x-2">
+      <div class="space-y-3">
         <input
           hlmInput
           formControlName="name"
           type="text"
           placeholder="Watchlist name"
-          class="flex-1"
+          class="w-full"
         />
-        <brn-select formControlName="color">
-          <hlm-select-trigger class="w-[120px]">
-            <hlm-select-value>
-              <div class="flex items-center">
-                <span
-                  class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
-                  [ngStyle]="{
-                    backgroundColor: createForm.get('color')?.value || '#3b82f6',
-                    borderColor: 'hsl(0, 0%, 20%)'
-                  }"
-                ></span>
-                {{ getColorLabel(createForm.get("color")?.value || "#3b82f6") }}
-              </div>
-            </hlm-select-value>
-          </hlm-select-trigger>
-          <hlm-select-content>
-            <div class="max-h-[300px] overflow-auto">
-              @for (color of colorOptions; track color.value) {
-              <hlm-option
-                [value]="color.value"
-                class="relative flex items-center justify-between rounded-sm py-1.5 pl-2 pr-8 text-sm"
-              >
+        <textarea
+          hlmInput
+          formControlName="description"
+          placeholder="Description (optional)"
+          class="w-full resize-y min-h-[60px]"
+        ></textarea>
+        <div class="flex items-center">
+          <brn-select
+            formControlName="color"
+            class="w-full"
+          >
+            <hlm-select-trigger>
+              <hlm-select-value>
                 <div class="flex items-center">
                   <span
                     class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
                     [ngStyle]="{
-                      backgroundColor: color.value,
+                      backgroundColor: createForm.get('color')?.value || '#3b82f6',
                       borderColor: 'hsl(0, 0%, 20%)'
                     }"
                   ></span>
-                  {{ color.label }}
+                  {{ getColorLabel(createForm.get("color")?.value || "#3b82f6") }}
                 </div>
-              </hlm-option>
-              }
-            </div>
-          </hlm-select-content>
-        </brn-select>
+              </hlm-select-value>
+            </hlm-select-trigger>
+            <hlm-select-content>
+              <div class="max-h-[300px] overflow-auto">
+                @for (color of colorOptions; track color.value) {
+                <hlm-option
+                  [value]="color.value"
+                  class="relative flex items-center justify-between rounded-sm py-1.5 pl-2 pr-8 text-sm"
+                >
+                  <div class="flex items-center">
+                    <span
+                      class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
+                      [ngStyle]="{
+                        backgroundColor: color.value,
+                        borderColor: 'hsl(0, 0%, 20%)'
+                      }"
+                    ></span>
+                    {{ color.label }}
+                  </div>
+                </hlm-option>
+                }
+              </div>
+            </hlm-select-content>
+          </brn-select>
+        </div>
       </div>
       <div class="flex justify-end space-x-2">
         <button
@@ -183,51 +194,62 @@
       [formGroup]="editForm"
     >
       <h3 class="font-medium">Edit Watchlist</h3>
-      <div class="flex items-center space-x-2">
+      <div class="space-y-3">
         <input
           hlmInput
           formControlName="name"
           type="text"
           placeholder="Watchlist name"
-          class="flex-1"
+          class="w-full"
         />
-        <brn-select formControlName="color">
-          <hlm-select-trigger class="w-[120px]">
-            <hlm-select-value>
-              <div class="flex items-center">
-                <span
-                  class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
-                  [ngStyle]="{
-                    backgroundColor: editForm.get('color')?.value || '#3b82f6',
-                    borderColor: 'hsl(0, 0%, 20%)'
-                  }"
-                ></span>
-                {{ getColorLabel(editForm.get("color")?.value || "#3b82f6") }}
-              </div>
-            </hlm-select-value>
-          </hlm-select-trigger>
-          <hlm-select-content>
-            <div class="max-h-[300px] overflow-auto">
-              @for (color of colorOptions; track color.value) {
-              <hlm-option
-                [value]="color.value"
-                class="relative flex items-center justify-between rounded-sm py-1.5 pl-2 pr-8 text-sm"
-              >
+        <textarea
+          hlmInput
+          formControlName="description"
+          placeholder="Description (optional)"
+          class="w-full resize-y min-h-[60px]"
+        ></textarea>
+        <div class="flex items-center">
+          <brn-select
+            formControlName="color"
+            class="w-full"
+          >
+            <hlm-select-trigger>
+              <hlm-select-value>
                 <div class="flex items-center">
                   <span
                     class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
                     [ngStyle]="{
-                      backgroundColor: color.value,
+                      backgroundColor: editForm.get('color')?.value || '#3b82f6',
                       borderColor: 'hsl(0, 0%, 20%)'
                     }"
                   ></span>
-                  {{ color.label }}
+                  {{ getColorLabel(editForm.get("color")?.value || "#3b82f6") }}
                 </div>
-              </hlm-option>
-              }
-            </div>
-          </hlm-select-content>
-        </brn-select>
+              </hlm-select-value>
+            </hlm-select-trigger>
+            <hlm-select-content>
+              <div class="max-h-[300px] overflow-auto">
+                @for (color of colorOptions; track color.value) {
+                <hlm-option
+                  [value]="color.value"
+                  class="relative flex items-center justify-between rounded-sm py-1.5 pl-2 pr-8 text-sm"
+                >
+                  <div class="flex items-center">
+                    <span
+                      class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
+                      [ngStyle]="{
+                        backgroundColor: color.value,
+                        borderColor: 'hsl(0, 0%, 20%)'
+                      }"
+                    ></span>
+                    {{ color.label }}
+                  </div>
+                </hlm-option>
+                }
+              </div>
+            </hlm-select-content>
+          </brn-select>
+        </div>
       </div>
       <div class="flex justify-end space-x-2">
         <button

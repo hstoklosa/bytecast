@@ -74,11 +74,13 @@ export class WatchlistManagerComponent {
 
   createForm = this.fb.group({
     name: ["", [Validators.required, Validators.minLength(1)]],
+    description: [""],
     color: ["#3b82f6", [Validators.required]],
   });
 
   editForm = this.fb.group({
     name: ["", [Validators.required, Validators.minLength(1)]],
+    description: [""],
     color: ["#3b82f6", [Validators.required]],
   });
 
@@ -166,7 +168,7 @@ export class WatchlistManagerComponent {
   // Create Operations
   startCreating(): void {
     this.isCreating.set(true);
-    this.createForm.reset({ name: "", color: "#3b82f6" });
+    this.createForm.reset({ name: "", description: "", color: "#3b82f6" });
   }
 
   cancelCreate(): void {
@@ -176,9 +178,13 @@ export class WatchlistManagerComponent {
 
   createWatchlist(): void {
     if (this.createForm.valid) {
-      const { name, color } = this.createForm.value;
+      const { name, description, color } = this.createForm.value;
       this.watchlistService
-        .createWatchlist({ name: name!, color: color! })
+        .createWatchlist({
+          name: name!,
+          description: description || "",
+          color: color!,
+        })
         .subscribe({
           next: (newWatchlist) => {
             this.selectedWatchlistId.set(newWatchlist.id);
@@ -202,6 +208,7 @@ export class WatchlistManagerComponent {
     if (watchlist) {
       this.editForm.patchValue({
         name: watchlist.name,
+        description: watchlist.description || "",
         color: watchlist.color,
       });
       this.isEditing.set(true);
@@ -217,9 +224,13 @@ export class WatchlistManagerComponent {
     const selectedId = this.selectedWatchlistId();
     if (!selectedId || !this.editForm.valid) return;
 
-    const { name, color } = this.editForm.value;
+    const { name, description, color } = this.editForm.value;
     this.watchlistService
-      .updateWatchlist(selectedId, { name: name!, color: color! })
+      .updateWatchlist(selectedId, {
+        name: name!,
+        description: description || "",
+        color: color!,
+      })
       .subscribe({
         next: () => {
           this.isEditing.set(false);
