@@ -7,13 +7,19 @@
       (ngSubmit)="handleSearch()"
       class="flex w-full items-center space-x-2"
     >
-      <input
-        [formControl]="searchQuery"
-        type="text"
-        placeholder="Search for YouTube channels"
-        hlmInput
-        class="flex-1"
-      />
+      <div class="relative flex-1">
+        <lucide-angular
+          [img]="searchIcon"
+          class="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none"
+        ></lucide-angular>
+        <input
+          [formControl]="searchQuery"
+          type="text"
+          placeholder="Search for YouTube channels"
+          hlmInput
+          class="w-full pl-10"
+        />
+      </div>
       <button
         hlmBtn
         type="submit"
@@ -24,11 +30,6 @@
           size="sm"
           class="mr-2"
         />
-        <lucide-angular
-          *ngIf="!isLoading"
-          [img]="searchIcon"
-          class="mr-2 h-4 w-4"
-        ></lucide-angular>
         Search
       </button>
     </form>
