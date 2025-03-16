@@ -1,12 +1,12 @@
 package configs
 
 import (
-    "fmt"
-    "log"
-    "os"
-    
-    "github.com/go-playground/validator/v10"
-    "github.com/joho/godotenv"
+	"fmt"
+	"log"
+	"os"
+
+	"github.com/go-playground/validator/v10"
+	"github.com/joho/godotenv"
 )
 
 // Config holds all configuration for the application
@@ -15,6 +15,7 @@ type Config struct {
     JWT       JWT       `validate:"required"`
     Server    Server    `validate:"required"`
     Superuser Superuser `validate:"required"`
+    YouTube   YouTube
 }
 
 type Superuser struct {
@@ -39,6 +40,10 @@ type Server struct {
     Port        string `validate:"required,numeric"`
     Environment string `validate:"required,oneof=development production"`
     Domain      string `validate:"required"`
+}
+
+type YouTube struct {
+    APIKey string
 }
 
 // Load returns a validated configuration struct
@@ -69,6 +74,9 @@ func Load() (*Config, error) {
             Port:        getEnvWithDefault("PORT", "8080"),
             Environment: getEnvWithDefault("APP_ENV", "development"),
             Domain:      getEnvWithDefault("APP_DOMAIN", "localhost"),
+        },
+        YouTube: YouTube{
+            APIKey: getEnvWithDefault("YOUTUBE_API_KEY", ""),
         },
     }
 
