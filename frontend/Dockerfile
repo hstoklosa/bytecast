@@ -1,13 +1,14 @@
-FROM node:20 AS build-stage
+FROM node:20-alpine AS base
 
 WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install
+# Clean npm cache for smaller image
+RUN npm ci && npm cache clean --force
 
-COPY ./ /app/
+COPY . .
 
 EXPOSE 4200
 
-CMD ["npm", "run", "start", "--", "--host", "0.0.0.0"]
+CMD ["npm", "run", "start", "--", "--host", "0.0.0.0", "--poll", "500"]

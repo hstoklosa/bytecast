@@ -3,6 +3,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    container_name: bytecast-frontend
     ports:
       - "4200:4200"
     volumes:
@@ -10,38 +11,59 @@ services:
       - /app/node_modules
     environment:
       - NODE_ENV=development
+    depends_on:
+      - backend
+    networks:
+      - bytecast-network
+    restart: unless-stopped
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    container_name: bytecast-backend
     ports:
       - "8080:8080"
+    volumes:
+      - ./backend:/app
+      - /app/tmp
     environment:
       - GIN_MODE=debug
-      - DB_HOST=${POSTGRES_HOST}
-      - DB_USER=${POSTGRES_USER}
-      - DB_PASSWORD=${POSTGRES_PASSWORD}
-      - DB_NAME=${POSTGRES_DB}
-      - DB_PORT=${POSTGRES_PORT}
-      - SUPERUSER_USERNAME=${SUPERUSER_USERNAME}
-      - SUPERUSER_EMAIL=${SUPERUSER_EMAIL}
-      - SUPERUSER_PASSWORD=${SUPERUSER_PASSWORD}
-      - JWT_SECRET=${JWT_SECRET}
+      - DB_HOST=${POSTGRES_HOST:-postgres}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - DB_NAME=${POSTGRES_DB:-bytecast}
+      - DB_PORT=${POSTGRES_PORT:-5432}
+      - SUPERUSER_USERNAME=${SUPERUSER_USERNAME:-admin}
+      - SUPERUSER_EMAIL=${SUPERUSER_EMAIL:-admin@example.com}
+      - SUPERUSER_PASSWORD=${SUPERUSER_PASSWORD:-admin}
+      - JWT_SECRET=${JWT_SECRET:-secret}
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
     depends_on:
       - postgres
+    networks:
+      - bytecast-network
+    restart: unless-stopped
 
   postgres:
-    image: postgres:17.4
+    image: postgres:17.4-alpine
+    container_name: bytecast-postgres
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-bytecast}
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bytecast-network
+    restart: unless-stopped
+
+networks:
+  bytecast-network:
+    driver: bridge
 
 volumes:
   postgres_data:
+    driver: local
