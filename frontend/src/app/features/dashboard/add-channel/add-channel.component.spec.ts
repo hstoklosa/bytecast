@@ -1,8 +1,6 @@
 import { ComponentFixture, TestBed } from "@angular/core/testing";
 import { AddChannelComponent } from "./add-channel.component";
-import { WatchlistService } from "../../../core/services/watchlist.service";
 import { of } from "rxjs";
-import { Channel } from "../../../core/services/watchlist.service";
 import { ReactiveFormsModule } from "@angular/forms";
 import { HlmButtonDirective } from "@spartan-ng/ui-button-helm";
 import {
@@ -13,6 +11,9 @@ import { HlmInputDirective } from "@spartan-ng/ui-input-helm";
 import { HlmSpinnerComponent } from "@spartan-ng/ui-spinner-helm";
 import { NgIf } from "@angular/common";
 import { LucideAngularModule } from "lucide-angular";
+
+import { WatchlistService } from "../../../core/services/watchlist.service";
+import { Channel } from "../../../core/models";
 
 describe("AddChannelComponent", () => {
   let component: AddChannelComponent;

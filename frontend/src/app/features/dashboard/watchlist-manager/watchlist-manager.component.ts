@@ -22,6 +22,7 @@ import { AddChannelComponent } from "../add-channel/add-channel.component";
 import { toast } from "ngx-sonner";
 import { LucideAngularModule, Edit, Trash2, Plus, Check, X } from "lucide-angular";
 import { ColorOption } from "./watchlist-manager.interface";
+import { ConfirmationDialogComponent } from "../../../shared/components";
 
 @Component({
   selector: "app-watchlist-manager",
@@ -38,6 +39,7 @@ import { ColorOption } from "./watchlist-manager.interface";
     HlmBadgeDirective,
     AddChannelComponent,
     LucideAngularModule,
+    ConfirmationDialogComponent,
   ],
   templateUrl: "./watchlist-manager.component.html",
   styleUrls: ["./watchlist-manager.component.css"],
@@ -242,25 +244,44 @@ export class WatchlistManagerComponent {
 
     const watchlist = this.watchlists()?.find((w) => w.id === selectedId);
     if (!watchlist) return;
+  }
 
-    // Confirm deletion
-    if (confirm(`Are you sure you want to delete "${watchlist.name}" watchlist?`)) {
-      this.watchlistService.deleteWatchlist(selectedId).subscribe({
-        next: () => {
-          // Switch to the first available watchlist
-          const remainingWatchlist = this.watchlists()?.find(
-            (w) => w.id !== selectedId
-          );
-          if (remainingWatchlist) {
-            this.selectedWatchlistId.set(remainingWatchlist.id);
-          } else {
-            this.selectedWatchlistId.set(null);
-          }
-        },
-        error: () => {
-          toast.error("Failed to delete watchlist");
-        },
-      });
+  /**
+   * Get the confirmation message for deleting a watchlist
+   */
+  getDeleteConfirmationMessage(): string {
+    const watchlist = this.activeWatchlist();
+    if (!watchlist) return "Are you sure you want to delete this watchlist?";
+
+    return `Are you sure you want to delete "${watchlist.name}" watchlist? This action cannot be undone.`;
+  }
+
+  // Handle confirmation from the dialog
+  onDeleteConfirmed(): void {
+    const selectedId = this.selectedWatchlistId();
+    if (!selectedId) return;
+
+    // Don't allow deleting the last watchlist
+    if (this.watchlists()?.length <= 1) {
+      toast.error("You must have at least one watchlist");
+      return;
     }
+
+    this.watchlistService.deleteWatchlist(selectedId).subscribe({
+      next: () => {
+        // Switch to the first available watchlist
+        const remainingWatchlist = this.watchlists()?.find(
+          (w) => w.id !== selectedId
+        );
+        if (remainingWatchlist) {
+          this.selectedWatchlistId.set(remainingWatchlist.id);
+        } else {
+          this.selectedWatchlistId.set(null);
+        }
+      },
+      error: () => {
+        toast.error("Failed to delete watchlist");
+      },
+    });
   }
 }

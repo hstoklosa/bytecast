@@ -8,7 +8,7 @@ import {
   CreateWatchlistDTO,
   UpdateWatchlistDTO,
   Watchlist,
-} from "../models/watchlist.model";
+} from "../models";
 
 @Injectable({
   providedIn: "root",
