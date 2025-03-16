@@ -28,17 +28,19 @@ import { DashboardLayoutComponent } from "../../layout/dashboard-layout/dashboar
 
       <hlm-tabs tab="feed">
         <hlm-tabs-list
-          class="w-full grid grid-cols-3"
+          class="w-full grid grid-cols-3 mt-8 mb-6"
           aria-label="Manage your watchlist"
         >
           <button hlmTabsTrigger="feed">Video Feed</button>
           <button hlmTabsTrigger="channels">Channels</button>
           <button hlmTabsTrigger="settings">Settings</button>
         </hlm-tabs-list>
+
         <div hlmTabsContent="feed">
           <h2 class="text-xl font-semibold mb-4">Feed</h2>
           <p>Your personalized video feed will appear here.</p>
         </div>
+
         <div hlmTabsContent="channels">
           <h2 class="text-xl font-semibold mb-4">Channels</h2>
           @if (!watchlistService.activeWatchlist()) {
@@ -78,6 +80,7 @@ import { DashboardLayoutComponent } from "../../layout/dashboard-layout/dashboar
           </p>
           }
         </div>
+
         <div hlmTabsContent="settings">
           <h2 class="text-xl font-semibold mb-4">Settings</h2>
           <div class="space-y-4">

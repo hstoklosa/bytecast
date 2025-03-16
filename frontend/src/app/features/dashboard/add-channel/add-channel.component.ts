@@ -1,13 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, Input } from "@angular/core";
 import { FormControl, ReactiveFormsModule } from "@angular/forms";
 import { HlmButtonDirective } from "@spartan-ng/ui-button-helm";
-import {
-  HlmCardContentDirective,
-  HlmCardDescriptionDirective,
-  HlmCardDirective,
-  HlmCardHeaderDirective,
-  HlmCardTitleDirective,
-} from "@spartan-ng/ui-card-helm";
 import { HlmInputDirective } from "@spartan-ng/ui-input-helm";
 import { NgIf } from "@angular/common";
 import { HlmSpinnerComponent } from "@spartan-ng/ui-spinner-helm";
@@ -22,11 +15,6 @@ import { Channel } from "../../../core/models";
   imports: [
     ReactiveFormsModule,
     HlmButtonDirective,
-    HlmCardDirective,
-    HlmCardHeaderDirective,
-    HlmCardTitleDirective,
-    HlmCardDescriptionDirective,
-    HlmCardContentDirective,
     HlmInputDirective,
     HlmSpinnerComponent,
     NgIf,

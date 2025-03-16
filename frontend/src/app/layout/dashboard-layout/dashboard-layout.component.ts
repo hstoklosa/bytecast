@@ -37,24 +37,28 @@ import { ThemeToggleComponent } from "../../shared/components";
   ],
   providers: [provideIcons({ lucideUser, lucideSettings })],
   template: `
-    <div class="min-h-screen bg-background py-6 space-y-8">
-      <header class="sticky top-0 z-50 w-full bg-background/95 backdrop-blur">
+    <div class="min-h-screen bg-background space-y-8">
+      <header
+        class="sticky top-0 z-50 w-full py-1.5 border-b bg-background/95 backdrop-blur"
+      >
         <div class="container flex h-14 items-center justify-between">
-          <h1 class="text-3xl font-bold tracking-tight">Bytecast</h1>
-          <div class="flex items-center gap-2">
-            <app-theme-toggle />
+          <h1 class="text-2xl font-bold tracking-tight">Bytecast</h1>
+          <div class="flex items-center gap-0.5">
             <button
               hlmBtn
               variant="ghost"
               size="icon"
               align="end"
               [brnMenuTriggerFor]="menu"
+              class="size-8"
             >
               <ng-icon
                 hlm
                 name="lucideUser"
+                size="16px"
               />
             </button>
+            <app-theme-toggle />
           </div>
 
           <ng-template #menu>
