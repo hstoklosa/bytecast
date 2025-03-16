@@ -120,10 +120,9 @@ export class EditWatchlistDialogComponent implements OnChanges {
         next: () => {
           dialogRef.close();
           this.watchlistUpdated.emit();
-          toast.success("Watchlist updated successfully");
         },
         error: () => {
-          toast.error("Failed to update watchlist");
+          // Toast is already shown in the service
         },
       });
   }

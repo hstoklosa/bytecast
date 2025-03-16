@@ -107,10 +107,9 @@ export class CreateWatchlistDialogComponent {
             this.createForm.reset({ name: "", description: "", color: "#3b82f6" });
             dialogRef.close();
             this.watchlistCreated.emit();
-            toast.success("Watchlist created successfully");
           },
           error: () => {
-            toast.error("Failed to create watchlist");
+            // Toast is already shown in the service
           },
         });
     }

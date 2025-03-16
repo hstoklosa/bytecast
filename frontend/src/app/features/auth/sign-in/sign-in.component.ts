@@ -87,11 +87,9 @@ export class SignInComponent {
           toast.success("Signed in successfully");
           this.router.navigate(["/dashboard"]);
         },
-        error: (error: HttpErrorResponse) => {
+        error: (error) => {
           this.isLoading = false;
-          const errorMessage =
-            error.error?.message || "Sign in failed. Please try again.";
-          toast.error(errorMessage);
+          toast.error(error.message || "Sign in failed. Please try again.");
         },
       });
     } else {
