@@ -48,8 +48,24 @@ type YouTube struct {
 
 // Load returns a validated configuration struct
 func Load() (*Config, error) {
-    // Load .env file from project root (where backend folder resides)
-    if err := godotenv.Load("../../../.env"); err != nil {
+    // Try multiple possible locations for .env file
+    envPaths := []string{
+        ".env",                // Current directory
+        "../.env",             // One level up
+        "../../.env",          // Two levels up
+        "../../../.env",       // Three levels up (original path)
+    }
+    
+    envLoaded := false
+    for _, path := range envPaths {
+        if err := godotenv.Load(path); err == nil {
+            log.Printf("Loaded .env file from %s", path)
+            envLoaded = true
+            break
+        }
+    }
+    
+    if !envLoaded {
         log.Printf("Note: .env file not found, using environment variables")
     }
 
@@ -83,6 +99,11 @@ func Load() (*Config, error) {
     // Check JWT secret before validation
     if cfg.JWT.Secret == "" {
         log.Printf("Warning: JWT_SECRET not set")
+    }
+    
+    // Log YouTube API key status
+    if cfg.YouTube.APIKey == "" {
+        log.Printf("Warning: YOUTUBE_API_KEY not set, YouTube API features will be disabled")
     }
 
     // Validate entire configuration
