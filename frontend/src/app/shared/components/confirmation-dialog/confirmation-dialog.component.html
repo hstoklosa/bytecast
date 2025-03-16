@@ -1,0 +1,41 @@
+<hlm-alert-dialog>
+  <button
+    [disabled]="disabled"
+    [variant]="triggerVariant"
+    brnAlertDialogTrigger
+    hlmBtn
+    [class]="triggerClass"
+  >
+    <ng-content *ngIf="!triggerText"></ng-content>
+    <span *ngIf="triggerText">{{ triggerText }}</span>
+  </button>
+  <ng-template
+    brnAlertDialogContent
+    let-ctx
+  >
+    <hlm-alert-dialog-content>
+      <hlm-alert-dialog-header>
+        <h3 hlmAlertDialogTitle>{{ title }}</h3>
+        <p hlmAlertDialogDescription>
+          {{ description }}
+        </p>
+      </hlm-alert-dialog-header>
+      <hlm-alert-dialog-footer>
+        <button
+          hlmAlertDialogCancel
+          (click)="onCancel(ctx.close)"
+        >
+          {{ cancelText }}
+        </button>
+        <button
+          hlmBtn
+          [variant]="confirmVariant"
+          class="hlm-alert-dialog-action"
+          (click)="onConfirm(ctx.close)"
+        >
+          {{ confirmText }}
+        </button>
+      </hlm-alert-dialog-footer>
+    </hlm-alert-dialog-content>
+  </ng-template>
+</hlm-alert-dialog>
