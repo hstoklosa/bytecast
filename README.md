@@ -43,12 +43,14 @@ flowchart LR
 ### Development Setup
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/yourusername/bytecast.git
    cd bytecast
    ```
 
 2. Set up environment variables:
+
    ```bash
    cp .env.example .env
    # Edit .env with your configuration
@@ -60,28 +62,44 @@ flowchart LR
    ```
 
 The application will be available at:
+
 - Frontend: http://localhost:4200
 - Backend API: http://localhost:8080
 
 ## Project Status
 
 ### Completed ✅
+
 - Project structure and Docker setup
 - Frontend and backend configurations
 - Hot reload setup for development
 - Basic health check endpoint
 
 ### In Progress 🚧
+
 - Testing development environment
 - Database connectivity
 - Environment variables validation
 
 ### Upcoming 📋
+
 - Docker optimizations
 - Database schema design
-- YouTube API integration
 - Authentication system
 - Channel management features
+
+### YouTube API Integration
+
+The application uses the YouTube Data API v3 to fetch channel information. To use this feature:
+
+1. Obtain a YouTube Data API key from the [Google Cloud Console](https://console.cloud.google.com/)
+2. Add your API key to the `.env` file as `YOUTUBE_API_KEY=your_api_key_here`
+
+The API is used to:
+
+- Fetch channel details when adding channels to watchlists
+- Resolve channel URLs and handles to actual channel IDs
+- Retrieve channel metadata (title, description, thumbnail)
 
 ## Contributing
 
