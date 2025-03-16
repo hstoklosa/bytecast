@@ -1,38 +1,117 @@
-<div hlmCard>
-  <div
-    hlmCardContent
-    class="pt-6"
-  >
-    <!-- Watchlist Selection and Management -->
-    <div class="flex items-center justify-between mb-4">
-      <div class="flex items-center space-x-2">
+<!-- Header and View Tabs -->
+<hlm-tabs
+  [tab]="viewMode()"
+  class="w-full"
+>
+  <div class="flex items-center justify-between mb-6">
+    <h2 class="text-2xl font-semibold">Watchlists</h2>
+
+    <hlm-tabs-list
+      class="w-auto grid grid-cols-3 max-w-md"
+      aria-label="View options"
+    >
+      <button
+        hlmTabsTrigger="default"
+        (click)="setViewMode('default')"
+        class="flex items-center gap-2"
+      >
+        <ng-icon
+          hlm
+          name="lucideLayoutDashboard"
+          size="sm"
+        ></ng-icon>
+        Default
+      </button>
+      <button
+        hlmTabsTrigger="grid"
+        (click)="setViewMode('grid')"
+        [disabled]="true"
+        class="flex items-center gap-2"
+      >
+        <ng-icon
+          hlm
+          name="lucideLayoutGrid"
+          size="sm"
+        ></ng-icon>
+        Grid
+      </button>
+      <button
+        hlmTabsTrigger="list"
+        (click)="setViewMode('list')"
+        [disabled]="true"
+        class="flex items-center gap-2"
+      >
+        <ng-icon
+          hlm
+          name="lucideList"
+          size="sm"
+        ></ng-icon>
+        List
+      </button>
+    </hlm-tabs-list>
+  </div>
+
+  <div hlmTabsContent="default">
+    <!-- Default view content with sidebar layout -->
+    <div
+      class="flex flex-col md:flex-row gap-6 h-[calc(100vh-350px)] min-h-[200px]"
+    >
+      <!-- Sidebar Navigation -->
+      <div class="w-full md:w-80 flex-shrink-0 h-full">
         <div
-          class="relative"
-          [formGroup]="watchlistForm"
+          hlmCard
+          class="h-full flex flex-col"
         >
-          <brn-select formControlName="selectedWatchlist">
-            <hlm-select-trigger class="w-[180px]">
-              <hlm-select-value>
-                <div class="flex items-center">
-                  @if (activeWatchlist(); as watchlist) {
-                  <span
-                    class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
-                    [ngStyle]="{
-                      backgroundColor: watchlist.color,
-                      borderColor: 'hsl(0, 0%, 20%)'
-                    }"
-                  ></span>
-                  }
-                  {{ getSelectedWatchlistName() }}
-                </div>
-              </hlm-select-value>
-            </hlm-select-trigger>
-            <hlm-select-content>
-              <div class="max-h-[300px] overflow-auto">
-                @for (watchlist of watchlists(); track watchlist.id) {
-                <hlm-option
-                  [value]="watchlist.id"
-                  class="relative flex items-center justify-between rounded-sm py-1.5 pl-2 pr-8 text-sm"
+          <div class="p-4 border-b flex items-center justify-between">
+            <h3 class="font-medium">My Watchlists</h3>
+            <app-create-watchlist-dialog (watchlistCreated)="onWatchlistCreated()">
+              <button
+                hlmBtn
+                variant="ghost"
+                size="icon"
+                class="h-8 w-8"
+              >
+                <lucide-angular
+                  [img]="plusIcon"
+                  class="h-4 w-4"
+                ></lucide-angular>
+              </button>
+            </app-create-watchlist-dialog>
+          </div>
+
+          <div class="p-2 flex flex-col flex-1">
+            <div class="relative mb-2">
+              <div class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground">
+                <lucide-angular
+                  [img]="searchIcon"
+                  class="h-4 w-4"
+                ></lucide-angular>
+              </div>
+              <input
+                hlmInput
+                placeholder="Search watchlists"
+                class="pl-8 w-full"
+                [formControl]="watchlistSearchControl"
+                (input)="watchlistSearchControl.updateValueAndValidity()"
+              />
+            </div>
+
+            <div class="overflow-y-auto flex-1">
+              @if (filteredWatchlists().length === 0) {
+              <div class="p-4 text-center text-muted-foreground text-sm">
+                No watchlists found
+              </div>
+              } @else {
+              <div class="space-y-1">
+                @for (watchlist of filteredWatchlists(); track watchlist.id) {
+                <div
+                  class="flex items-center justify-between px-2 py-2 rounded-md cursor-pointer"
+                  [class.bg-accent]="watchlist.id === selectedWatchlistId()"
+                  [class.text-accent-foreground]="
+                    watchlist.id === selectedWatchlistId()
+                  "
+                  [class.hover:bg-muted]="watchlist.id !== selectedWatchlistId()"
+                  (click)="onWatchlistSelect(watchlist.id)"
                 >
                   <div class="flex items-center">
                     <span
@@ -42,75 +121,282 @@
                         borderColor: 'hsl(0, 0%, 20%)'
                       }"
                     ></span>
-                    {{ watchlist.name }}
+                    <span class="font-medium">{{ watchlist.name }}</span>
                   </div>
-                </hlm-option>
+                  <div class="flex items-center">
+                    <span
+                      hlmBadge
+                      variant="outline"
+                      class="mr-2 text-xs"
+                    >
+                      {{ getChannelCount(watchlist.id) }}
+                    </span>
+                    <app-edit-watchlist-dialog
+                      [watchlist]="watchlist"
+                      [disabled]="false"
+                      (watchlistUpdated)="onWatchlistUpdated()"
+                      (click)="$event.stopPropagation()"
+                    >
+                      <button
+                        hlmBtn
+                        variant="ghost"
+                        size="icon"
+                        class="h-7 w-7 opacity-50 hover:opacity-100"
+                        (click)="$event.stopPropagation()"
+                      >
+                        <lucide-angular
+                          [img]="editIcon"
+                          class="h-3.5 w-3.5"
+                        ></lucide-angular>
+                      </button>
+                    </app-edit-watchlist-dialog>
+                  </div>
+                </div>
                 }
               </div>
-            </hlm-select-content>
-          </brn-select>
+              }
+            </div>
+          </div>
         </div>
+      </div>
 
-        <!-- Edit Watchlist Dialog -->
-        <app-edit-watchlist-dialog
-          [watchlist]="activeWatchlist()"
-          [disabled]="!selectedWatchlistId()"
-          (watchlistUpdated)="onWatchlistUpdated()"
-        ></app-edit-watchlist-dialog>
-
-        <!-- Delete Button with Confirmation Dialog -->
-        <app-confirmation-dialog
-          triggerText=""
-          triggerVariant="outline"
-          triggerClass="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
-          [disabled]="!selectedWatchlistId()"
-          title="Delete Watchlist"
-          [description]="getDeleteConfirmationMessage()"
-          confirmText="Delete"
-          confirmVariant="destructive"
-          cancelText="Cancel"
-          (confirmed)="onDeleteConfirmed()"
+      <!-- Main Content -->
+      <div class="flex-1 h-full">
+        <div
+          hlmCard
+          class="h-full flex flex-col"
         >
-          <lucide-angular
-            [img]="trashIcon"
-            class="w-4 h-4"
-          ></lucide-angular>
-        </app-confirmation-dialog>
-      </div>
+          <div
+            hlmCardContent
+            class="p-6 flex-1 overflow-y-auto"
+          >
+            @if (activeWatchlist(); as watchlist) {
+            <div class="flex items-center justify-between mb-6">
+              <div class="flex items-center">
+                <span
+                  class="inline-block w-4 h-4 rounded-full mr-3 border border-foreground/20"
+                  [ngStyle]="{
+                    backgroundColor: watchlist.color,
+                    borderColor: 'hsl(0, 0%, 20%)'
+                  }"
+                ></span>
+                <h2 class="text-xl font-semibold">{{ watchlist.name }}</h2>
+              </div>
+              <div class="flex items-center space-x-2">
+                <app-edit-watchlist-dialog
+                  [watchlist]="watchlist"
+                  [disabled]="false"
+                  (watchlistUpdated)="onWatchlistUpdated()"
+                >
+                  <button
+                    hlmBtn
+                    variant="outline"
+                    size="sm"
+                  >
+                    <lucide-angular
+                      [img]="editIcon"
+                      class="h-4 w-4 mr-2"
+                    ></lucide-angular>
+                    Edit
+                  </button>
+                </app-edit-watchlist-dialog>
 
-      <!-- New Watchlist Dialog -->
-      <app-create-watchlist-dialog
-        (watchlistCreated)="onWatchlistCreated()"
-      ></app-create-watchlist-dialog>
+                <app-confirmation-dialog
+                  triggerText="Delete"
+                  triggerVariant="outline"
+                  triggerSize="sm"
+                  triggerClass="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  [disabled]="false"
+                  title="Delete Watchlist"
+                  [description]="getDeleteConfirmationMessage()"
+                  confirmText="Delete"
+                  confirmVariant="destructive"
+                  cancelText="Cancel"
+                  (confirmed)="onDeleteConfirmed()"
+                >
+                  <lucide-angular
+                    [img]="trashIcon"
+                    class="h-4 w-4 mr-2"
+                  ></lucide-angular>
+                </app-confirmation-dialog>
+              </div>
+            </div>
+
+            <div class="space-y-6">
+              <div class="border-b pb-4">
+                <h3 class="font-medium mb-3">Add Channels to this Watchlist</h3>
+                <app-add-channel [watchlistId]="selectedWatchlistId()!" />
+              </div>
+
+              <div>
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="font-medium">Channels in this Watchlist</h3>
+                  <div class="relative w-[200px]">
+                    <div
+                      class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"
+                    >
+                      <lucide-angular
+                        [img]="searchIcon"
+                        class="h-4 w-4"
+                      ></lucide-angular>
+                    </div>
+                    <input
+                      hlmInput
+                      placeholder="Search channels"
+                      class="pl-8 h-9 w-full"
+                      [formControl]="channelSearchControl"
+                      (input)="channelSearchControl.updateValueAndValidity()"
+                    />
+                  </div>
+                </div>
+
+                @if (filteredChannels().length === 0) {
+                <div
+                  class="bg-muted/40 rounded-lg p-8 text-center text-muted-foreground"
+                >
+                  {{
+                    channelSearchTerm()
+                      ? "No channels match your search query."
+                      : "No channels in this watchlist yet. Add some channels above."
+                  }}
+                </div>
+                } @else {
+                <div class="border rounded-lg overflow-hidden">
+                  @for (channel of filteredChannels(); track channel.id; let i =
+                  $index) {
+                  <div
+                    class="flex items-center justify-between p-4 hover:bg-muted/40 transition-colors"
+                    [class.border-b]="i !== filteredChannels().length - 1"
+                  >
+                    <div class="flex items-center space-x-3">
+                      <div class="relative">
+                        <img
+                          [src]="
+                            channel.thumbnail_url ||
+                            '/assets/images/placeholder.svg'
+                          "
+                          [alt]="channel.title"
+                          class="h-12 w-12 rounded-full object-cover"
+                        />
+                        @if (hasNotifications(channel.id)) {
+                        <div
+                          class="absolute -bottom-1 -right-1 bg-primary rounded-full w-4 h-4 flex items-center justify-center"
+                        >
+                          <lucide-angular
+                            [img]="bellIcon"
+                            class="h-2.5 w-2.5 text-primary-foreground"
+                          ></lucide-angular>
+                        </div>
+                        }
+                      </div>
+                      <div>
+                        <h4 class="font-medium line-clamp-1">
+                          {{ channel.title }}
+                        </h4>
+                        <div
+                          class="flex items-center text-sm text-muted-foreground"
+                        >
+                          @if (hasNotifications(channel.id)) {
+                          <span
+                            hlmBadge
+                            variant="secondary"
+                            class="text-xs font-normal"
+                          >
+                            Notifications On
+                          </span>
+                          } @else {
+                          <span
+                            hlmBadge
+                            variant="outline"
+                            class="text-xs font-normal text-muted-foreground"
+                          >
+                            Notifications Off
+                          </span>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                    <div class="flex items-center space-x-1">
+                      <div class="flex items-center mr-2">
+                        <!-- TODO: Replace with proper switch component when available -->
+                        <button
+                          hlmBtn
+                          variant="outline"
+                          size="sm"
+                          (click)="toggleNotifications(channel.id)"
+                        >
+                          {{ hasNotifications(channel.id) ? "Disable" : "Enable" }}
+                          Notifications
+                        </button>
+                      </div>
+                      <a
+                        hlmBtn
+                        variant="ghost"
+                        size="icon"
+                        [href]="getYoutubeChannelUrl(channel.youtube_id)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="text-muted-foreground hover:text-primary"
+                        title="Open YouTube channel"
+                      >
+                        <lucide-angular
+                          [img]="externalLinkIcon"
+                          class="h-4 w-4"
+                        ></lucide-angular>
+                      </a>
+                      <button
+                        hlmBtn
+                        variant="ghost"
+                        size="icon"
+                        (click)="removeChannel(channel.id)"
+                        class="text-muted-foreground hover:text-destructive"
+                      >
+                        <lucide-angular
+                          [img]="trashIcon"
+                          class="h-4 w-4"
+                        ></lucide-angular>
+                      </button>
+                    </div>
+                  </div>
+                  }
+                </div>
+                }
+              </div>
+            </div>
+            } @else {
+            <div class="text-center py-8 text-muted-foreground">
+              <p>Select a watchlist from the sidebar or create a new one.</p>
+            </div>
+            }
+          </div>
+        </div>
+      </div>
     </div>
-
-    <!-- Add Channel Component -->
-    @if (selectedWatchlistId()) {
-    <app-add-channel [watchlistId]="selectedWatchlistId()!" />
-
-    <!-- Channel Grid -->
-    <div class="mt-6">
-      <h3 class="text-lg font-medium mb-4">Channels</h3>
-
-      @if (channels().length === 0) {
-      <div class="text-center py-8 text-muted-foreground">
-        <p>No channels in this watchlist yet.</p>
-        <p class="text-sm mt-1">
-          Search for channels above to add them to your watchlist.
-        </p>
-      </div>
-      } @else {
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        @for (channel of channels(); track channel.id) {
-        <app-channel-card
-          [channel]="channel"
-          [watchlistId]="selectedWatchlistId()!"
-          (channelRemoved)="onChannelRemoved()"
-        ></app-channel-card>
-        }
-      </div>
-      }
-    </div>
-    }
   </div>
-</div>
+
+  <div hlmTabsContent="grid">
+    <div hlmCard>
+      <div
+        hlmCardContent
+        class="py-8"
+      >
+        <div class="text-center text-muted-foreground">
+          <p>Grid view is coming soon.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div hlmTabsContent="list">
+    <div hlmCard>
+      <div
+        hlmCardContent
+        class="py-8"
+      >
+        <div class="text-center text-muted-foreground">
+          <p>List view is coming soon.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</hlm-tabs>
