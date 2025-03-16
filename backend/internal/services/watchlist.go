@@ -2,10 +2,12 @@ package services
 
 import (
 	"errors"
+	"log"
 	"strings"
 
 	"gorm.io/gorm"
 
+	"bytecast/configs"
 	"bytecast/internal/models"
 )
 
@@ -18,13 +20,31 @@ var (
 
 // WatchlistService handles operations related to watchlists and channels
 type WatchlistService struct {
-	db *gorm.DB
+	db             *gorm.DB
+	youtubeService YouTubeServiceInterface
+	config         *configs.Config
 }
 
 // NewWatchlistService creates a new watchlist service
-func NewWatchlistService(db *gorm.DB) *WatchlistService {
+func NewWatchlistService(db *gorm.DB, config *configs.Config) *WatchlistService {
+	var youtubeService YouTubeServiceInterface
+	
+	// Only try to initialize YouTube service if API key is provided
+	if config != nil && config.YouTube.APIKey != "" {
+		var err error
+		youtubeService, err = NewYouTubeService(config)
+		if err != nil {
+			// Log the error but continue without YouTube service
+			log.Printf("Warning: YouTube service initialization failed: %v", err)
+		}
+	} else {
+		log.Printf("YouTube API key not provided, YouTube features will be disabled")
+	}
+	
 	return &WatchlistService{
-		db: db,
+		db:             db,
+		youtubeService: youtubeService,
+		config:         config,
 	}
 }
 
@@ -41,6 +61,11 @@ func (s *WatchlistService) CreateDefaultWatchlist(userID uint) error {
 
 // CreateWatchlist creates a new watchlist for a user
 func (s *WatchlistService) CreateWatchlist(userID uint, name, description, color string) (*models.Watchlist, error) {
+	// Validate userID
+	if userID == 0 {
+		return nil, errors.New("user ID is required")
+	}
+	
 	watchlist := models.Watchlist{
 		UserID:      userID,
 		Name:        name,
@@ -118,27 +143,61 @@ func (s *WatchlistService) AddChannelToWatchlist(watchlistID, userID uint, chann
 		return err
 	}
 
-	// Extract YouTube channel ID from URL if needed
-	youtubeID := extractYouTubeChannelID(channelID)
-	if youtubeID == "" {
-		return ErrInvalidYouTubeID
+	// Check if YouTube service is available
+	if s.youtubeService == nil {
+		return ErrMissingAPIKey
 	}
 
-	// Check if channel exists, create if not
+	// Use YouTube API to get channel info
+	channelInfo, err := s.youtubeService.GetChannelInfo(channelID)
+	if err != nil {
+		if errors.Is(err, ErrInvalidYouTubeURL) || errors.Is(err, ErrChannelNotFoundAPI) {
+			return ErrInvalidYouTubeID
+		}
+		return err
+	}
+
+	// Check if channel already exists in database
 	var channel models.Channel
-	err = s.db.Where("you_tube_id = ?", youtubeID).First(&channel).Error
+	err = s.db.Where("you_tube_id = ?", channelInfo.ID).First(&channel).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		// In a real implementation, we would fetch channel details from YouTube API
-		// For now, we'll create a placeholder
+		// Create new channel with data from YouTube API
 		channel = models.Channel{
-			YouTubeID: youtubeID,
-			Title:     "Channel " + youtubeID, // Placeholder, would be fetched from YouTube API
+			YouTubeID:     channelInfo.ID,
+			Title:         channelInfo.Title,
+			Description:   channelInfo.Description,
+			ThumbnailURL:  channelInfo.Thumbnail,
 		}
 		if err := s.db.Create(&channel).Error; err != nil {
 			return err
 		}
 	} else if err != nil {
 		return err
+	} else {
+		// Update existing channel with latest data from YouTube
+		channel.Title = channelInfo.Title
+		channel.Description = channelInfo.Description
+		channel.ThumbnailURL = channelInfo.Thumbnail
+		if err := s.db.Save(&channel).Error; err != nil {
+			return err
+		}
+	}
+
+	// Check if channel is already in the watchlist
+	var exists int64
+	err = s.db.Model(&models.Watchlist{}).
+		Joins("JOIN watchlist_channels ON watchlist_channels.watchlist_id = watchlists.id").
+		Joins("JOIN channels ON watchlist_channels.channel_id = channels.id").
+		Where("watchlists.id = ? AND channels.you_tube_id = ?", watchlistID, channelInfo.ID).
+		Count(&exists).Error
+	
+	if err != nil {
+		return err
+	}
+	
+	if exists > 0 {
+		// Channel is already in the watchlist, no need to add it again
+		return nil
 	}
 
 	// Add channel to watchlist
@@ -153,9 +212,19 @@ func (s *WatchlistService) RemoveChannelFromWatchlist(watchlistID, userID uint, 
 		return err
 	}
 
+	// Try to extract channel ID if it's a URL and YouTube service is available
+	extractedID := channelID
+	if s.youtubeService != nil && (strings.Contains(channelID, "/") || strings.Contains(channelID, "@")) {
+		// Try to get channel info to extract the proper ID
+		channelInfo, err := s.youtubeService.GetChannelInfo(channelID)
+		if err == nil && channelInfo != nil {
+			extractedID = channelInfo.ID
+		}
+	}
+
 	// Find channel
 	var channel models.Channel
-	if err := s.db.Where("you_tube_id = ?", channelID).First(&channel).Error; err != nil {
+	if err := s.db.Where("you_tube_id = ?", extractedID).First(&channel).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrChannelNotFound
 		}
@@ -181,29 +250,12 @@ func (s *WatchlistService) GetChannelsInWatchlist(watchlistID, userID uint) ([]m
 	return channels, nil
 }
 
-// Helper function to extract YouTube channel ID from various formats
-func extractYouTubeChannelID(input string) string {
-	// If it's already just an ID, return it
-	if !strings.Contains(input, "/") && !strings.Contains(input, ".") {
-		return input
-	}
+// YouTubeServiceInterface defines the interface for YouTube service
+type YouTubeServiceInterface interface {
+	GetChannelInfo(channelID string) (*ChannelInfo, error)
+}
 
-	// Handle URLs like https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw
-	if strings.Contains(input, "/channel/") {
-		parts := strings.Split(input, "/channel/")
-		if len(parts) > 1 {
-			id := parts[1]
-			// Remove any query parameters or hash
-			id = strings.Split(id, "?")[0]
-			id = strings.Split(id, "#")[0]
-			// Remove trailing slash if present
-			id = strings.TrimSuffix(id, "/")
-			return id
-		}
-	}
-
-	// In a real implementation, we would handle more URL formats
-	// and potentially use the YouTube API to resolve custom URLs
-
-	return ""
+// SetYouTubeService sets the YouTube service (used for testing)
+func (s *WatchlistService) SetYouTubeService(youtubeService YouTubeServiceInterface) {
+	s.youtubeService = youtubeService
 }

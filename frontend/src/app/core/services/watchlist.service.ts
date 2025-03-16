@@ -121,6 +121,7 @@ export class WatchlistService {
       this.refreshWatchlistChannels(watchlist.id);
     } else {
       localStorage.removeItem("activeWatchlist");
+      this._channels.set([]);
     }
   }
 
