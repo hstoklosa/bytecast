@@ -1,6 +1,7 @@
-import { Component } from "@angular/core";
+import { Component, inject } from "@angular/core";
 import { RouterOutlet } from "@angular/router";
 import { HlmToasterComponent } from "@spartan-ng/ui-sonner-helm";
+import { ThemeService } from "./core/services/theme.service";
 
 @Component({
   selector: "app-root",
@@ -11,4 +12,7 @@ import { HlmToasterComponent } from "@spartan-ng/ui-sonner-helm";
     <router-outlet></router-outlet>
   `,
 })
-export class AppComponent {}
+export class AppComponent {
+  // Inject ThemeService to ensure it's initialized
+  private themeService = inject(ThemeService);
+}
