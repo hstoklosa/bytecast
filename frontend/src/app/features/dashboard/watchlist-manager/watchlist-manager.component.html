@@ -32,16 +32,18 @@
                 @for (watchlist of watchlists(); track watchlist.id) {
                 <hlm-option
                   [value]="watchlist.id"
-                  class="relative flex items-center rounded-sm py-1.5 pl-8 pr-2 text-sm"
+                  class="relative flex items-center justify-between rounded-sm py-1.5 pl-2 pr-8 text-sm"
                 >
-                  <span
-                    class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
-                    [ngStyle]="{
-                      backgroundColor: watchlist.color,
-                      borderColor: 'hsl(0, 0%, 20%)'
-                    }"
-                  ></span>
-                  {{ watchlist.name }}
+                  <div class="flex items-center">
+                    <span
+                      class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
+                      [ngStyle]="{
+                        backgroundColor: watchlist.color,
+                        borderColor: 'hsl(0, 0%, 20%)'
+                      }"
+                    ></span>
+                    {{ watchlist.name }}
+                  </div>
                 </hlm-option>
                 }
               </div>
@@ -135,16 +137,18 @@
               @for (color of colorOptions; track color.value) {
               <hlm-option
                 [value]="color.value"
-                class="relative flex items-center rounded-sm py-1.5 pl-8 pr-2 text-sm"
+                class="relative flex items-center justify-between rounded-sm py-1.5 pl-2 pr-8 text-sm"
               >
-                <span
-                  class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
-                  [ngStyle]="{
-                    backgroundColor: color.value,
-                    borderColor: 'hsl(0, 0%, 20%)'
-                  }"
-                ></span>
-                {{ color.label }}
+                <div class="flex items-center">
+                  <span
+                    class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
+                    [ngStyle]="{
+                      backgroundColor: color.value,
+                      borderColor: 'hsl(0, 0%, 20%)'
+                    }"
+                  ></span>
+                  {{ color.label }}
+                </div>
               </hlm-option>
               }
             </div>
@@ -207,16 +211,18 @@
               @for (color of colorOptions; track color.value) {
               <hlm-option
                 [value]="color.value"
-                class="relative flex items-center rounded-sm py-1.5 pl-8 pr-2 text-sm"
+                class="relative flex items-center justify-between rounded-sm py-1.5 pl-2 pr-8 text-sm"
               >
-                <span
-                  class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
-                  [ngStyle]="{
-                    backgroundColor: color.value,
-                    borderColor: 'hsl(0, 0%, 20%)'
-                  }"
-                ></span>
-                {{ color.label }}
+                <div class="flex items-center">
+                  <span
+                    class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
+                    [ngStyle]="{
+                      backgroundColor: color.value,
+                      borderColor: 'hsl(0, 0%, 20%)'
+                    }"
+                  ></span>
+                  {{ color.label }}
+                </div>
               </hlm-option>
               }
             </div>
