@@ -1,0 +1,136 @@
+<hlm-dialog>
+  <!-- Dialog Trigger Button -->
+  <button
+    brnDialogTrigger
+    hlmBtn
+    size="sm"
+  >
+    <lucide-angular
+      [img]="plusIcon"
+      class="w-4 h-4 mr-2"
+    ></lucide-angular>
+    New Watchlist
+  </button>
+
+  <!-- Dialog Content -->
+  <hlm-dialog-content
+    class="sm:max-w-[400px]"
+    *brnDialogContent="let ctx"
+  >
+    <hlm-dialog-header>
+      <h3 hlmDialogTitle>Create New Watchlist</h3>
+      <p hlmDialogDescription>
+        Create a new watchlist to organize your favorite YouTube channels.
+      </p>
+    </hlm-dialog-header>
+
+    <!-- Form -->
+    <div
+      class="py-2 space-y-4"
+      [formGroup]="createForm"
+    >
+      <!-- Name Field -->
+      <div class="space-y-2">
+        <label
+          for="name"
+          class="text-sm font-medium block"
+        >
+          Name
+        </label>
+        <input
+          hlmInput
+          id="name"
+          formControlName="name"
+          type="text"
+          placeholder="Watchlist name"
+          class="w-full"
+        />
+      </div>
+
+      <!-- Description Field -->
+      <div class="space-y-2">
+        <label
+          for="description"
+          class="text-sm font-medium block"
+        >
+          Description (optional)
+        </label>
+        <textarea
+          hlmInput
+          id="description"
+          formControlName="description"
+          placeholder="Description"
+          class="w-full resize-y min-h-[80px]"
+        ></textarea>
+      </div>
+
+      <!-- Color Field -->
+      <div class="space-y-2">
+        <label
+          for="color"
+          class="text-sm font-medium block"
+        >
+          Color
+        </label>
+        <brn-select
+          formControlName="color"
+          class="w-full"
+        >
+          <hlm-select-trigger class="h-10">
+            <hlm-select-value>
+              <div class="flex items-center">
+                <span
+                  class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
+                  [ngStyle]="{
+                    backgroundColor: createForm.get('color')?.value || '#3b82f6',
+                    borderColor: 'hsl(0, 0%, 20%)'
+                  }"
+                ></span>
+                {{ getColorLabel(createForm.get("color")?.value || "#3b82f6") }}
+              </div>
+            </hlm-select-value>
+          </hlm-select-trigger>
+          <hlm-select-content>
+            <div class="max-h-[300px] overflow-auto">
+              @for (color of colorOptions; track color.value) {
+              <hlm-option
+                [value]="color.value"
+                class="relative flex items-center justify-between rounded-sm py-1.5 pl-2 pr-8 text-sm"
+              >
+                <div class="flex items-center">
+                  <span
+                    class="inline-block w-3 h-3 rounded-full mr-2 border border-foreground/20"
+                    [ngStyle]="{
+                      backgroundColor: color.value,
+                      borderColor: 'hsl(0, 0%, 20%)'
+                    }"
+                  ></span>
+                  {{ color.label }}
+                </div>
+              </hlm-option>
+              }
+            </div>
+          </hlm-select-content>
+        </brn-select>
+      </div>
+    </div>
+
+    <!-- Dialog Footer -->
+    <hlm-dialog-footer class="mt-2">
+      <button
+        hlmBtn
+        variant="outline"
+        (click)="ctx.close()"
+      >
+        Cancel
+      </button>
+      <button
+        hlmBtn
+        (click)="createWatchlist(ctx)"
+        [disabled]="!createForm.valid"
+      >
+        Create
+      </button>
+    </hlm-dialog-footer>
+  </hlm-dialog-content>
+</hlm-dialog>
