@@ -15,3 +15,15 @@
   padding-left: 12px !important;
   padding-right: 32px !important;
 }
+
+/* Fix for watchlist scrollbar */
+.overflow-y-auto {
+  overflow-y: auto !important;
+  scrollbar-width: thin;
+}
+
+/* Ensure the watchlist container takes full height */
+.flex-1 {
+  flex: 1 1 auto;
+  min-height: 0;
+}

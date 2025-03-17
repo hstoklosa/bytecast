@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, inject, Input } from "@angular/core";
+import {
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  Input,
+  Output,
+  EventEmitter,
+} from "@angular/core";
 import { FormControl, ReactiveFormsModule } from "@angular/forms";
 import { HlmButtonDirective } from "@spartan-ng/ui-button-helm";
 import { HlmInputDirective } from "@spartan-ng/ui-input-helm";
@@ -27,6 +34,7 @@ import { Channel } from "../../../core/models";
 })
 export class AddChannelComponent {
   @Input({ required: true }) watchlistId!: number;
+  @Output() channelAdded = new EventEmitter<void>();
 
   private channelService = inject(ChannelService);
 
@@ -44,7 +52,7 @@ export class AddChannelComponent {
       .addChannelToWatchlist(this.watchlistId, this.searchQuery.value)
       .subscribe({
         next: () => {
-          toast.success("Channel added to watchlist");
+          this.channelAdded.emit();
           this.searchQuery.reset();
           this.isLoading = false;
         },

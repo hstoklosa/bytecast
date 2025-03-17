@@ -44,8 +44,8 @@ export class AuthService {
         console.error("Registration failed:", error);
         const errorMessage =
           error.error?.message || "Registration failed. Please try again.";
-        toast.error(errorMessage);
-        return throwError(() => this.handleError(error));
+        // Don't show toast here, let the component handle it
+        return throwError(() => new Error(errorMessage));
       })
     );
   }
@@ -61,8 +61,8 @@ export class AuthService {
         console.error("Login failed:", error);
         const errorMessage =
           error.error?.message || "Login failed. Please try again.";
-        toast.error(errorMessage);
-        return throwError(() => this.handleError(error));
+        // Don't show toast here, let the component handle it
+        return throwError(() => new Error(errorMessage));
       })
     );
   }

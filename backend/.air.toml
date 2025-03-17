@@ -1,0 +1,37 @@
+# Air is a live reload tool for Go apps
+# Config file for Air in TOML format
+
+# Working directory
+# . or absolute path, please note that the directories following must be under root.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o ./tmp/main ./cmd/server/main.go"
+bin = "./tmp/main" # output from 'cmd'
+# Customize binary, can setup environment variables when run your app.
+full_bin = "./tmp/main" #  
+include_ext = ["go", "mod"] # watched extensions
+exclude_dir = ["tmp", "vendor", ".git"]
+include_dir = []
+exclude_file = []
+exclude_regex = ["_test\\.go"]
+exclude_unchanged = true
+follow_symlink = true
+log = "air.log" # placed in tmp_dir
+delay = 1000 # not necessary to trigger build as soon as file changes
+stop_on_error = true # stop running old binary
+send_interrupt = true
+kill_delay = "0.5s"
+
+[log]
+time = false
+
+[color]
+main = "magenta"
+watcher = "cyan"
+build = "yellow"
+runner = "green"
+
+[misc]
+clean_on_exit = true # tmp directory

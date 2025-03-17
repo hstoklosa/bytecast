@@ -1,11 +1,13 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   EventEmitter,
   Input,
   OnChanges,
   Output,
   SimpleChanges,
+  ViewChild,
   inject,
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
@@ -59,6 +61,9 @@ export class EditWatchlistDialogComponent implements OnChanges {
   @Input() watchlist: Watchlist | null = null;
   @Input() disabled = false;
   @Output() watchlistUpdated = new EventEmitter<void>();
+
+  @ViewChild("dialogTrigger") dialogTrigger!: ElementRef<HTMLButtonElement>;
+  @ViewChild("dialog") dialog!: HlmDialogComponent;
 
   readonly editIcon = Edit;
   private fb = inject(FormBuilder);
@@ -120,11 +125,17 @@ export class EditWatchlistDialogComponent implements OnChanges {
         next: () => {
           dialogRef.close();
           this.watchlistUpdated.emit();
-          toast.success("Watchlist updated successfully");
         },
         error: () => {
-          toast.error("Failed to update watchlist");
+          // Toast is already shown in the service
         },
       });
+  }
+
+  // Method to open the dialog programmatically
+  openDialog(): void {
+    if (this.dialogTrigger && this.dialogTrigger.nativeElement) {
+      this.dialogTrigger.nativeElement.click();
+    }
   }
 }

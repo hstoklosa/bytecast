@@ -35,7 +35,6 @@ import { AuthLayoutComponent } from "../../../layout";
     HlmInputDirective,
     HlmLabelDirective,
     HlmSpinnerComponent,
-    HlmToasterComponent,
     AuthLayoutComponent,
   ],
 })
@@ -109,13 +108,11 @@ export class SignUpComponent {
           toast.success("Account created successfully");
           this.router.navigate(["/dashboard"]);
         },
-        error: (error: HttpErrorResponse) => {
+        error: (error) => {
           this.isLoading = false;
-          const errorMessage =
-            error.error?.message || "Registration failed. Please try again.";
-          toast.error(errorMessage);
+          toast.error(error.message || "Registration failed. Please try again.");
 
-          const message = error.error?.message?.toLowerCase() || "";
+          const message = error.message?.toLowerCase() || "";
           if (message.includes("email")) {
             this.signUpForm.get("email")?.setErrors({ exists: true });
           } else if (message.includes("username")) {

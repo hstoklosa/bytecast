@@ -1,31 +1,21 @@
-FROM golang:1.23.4-alpine
+FROM golang:1.23.4-alpine AS base
 
-RUN apk add --no-cache gcc musl-dev
+# Install necessary build tools
+RUN apk add --no-cache gcc musl-dev git
 
-WORKDIR /go/src/bytecast
+WORKDIR /app
 
+# Install air for hot reloading
 RUN go install github.com/cosmtrek/air@v1.49.0
+
+# Copy go.mod and go.sum first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
 
 COPY . .
 
-RUN go mod download
-
+# Create tmp directory for air
 RUN mkdir -p tmp
-
-RUN echo '[build]' > .air.toml && \
-    echo 'cmd = "go build -o ./tmp/main ./cmd/server/main.go"' >> .air.toml && \
-    echo 'bin = "./tmp/main"' >> .air.toml && \
-    echo 'include_ext = ["go", "mod"]' >> .air.toml && \
-    echo 'exclude_dir = ["tmp", "vendor"]' >> .air.toml && \
-    echo 'delay = 1000' >> .air.toml && \
-    echo 'kill_delay = "0.5s"' >> .air.toml && \
-    echo 'send_interrupt = true' >> .air.toml && \
-    echo 'stop_on_error = true' >> .air.toml && \
-    echo '[color]' >> .air.toml && \
-    echo 'build = "yellow"' >> .air.toml && \
-    echo 'main = "magenta"' >> .air.toml && \
-    echo 'runner = "green"' >> .air.toml && \
-    echo 'watcher = "cyan"' >> .air.toml
 
 EXPOSE 8080
 
