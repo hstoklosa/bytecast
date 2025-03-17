@@ -31,8 +31,6 @@ import { HlmButtonDirective } from "@spartan-ng/ui-button-helm";
     HlmAlertDialogTitleDirective,
     HlmAlertDialogDescriptionDirective,
     HlmAlertDialogCancelButtonDirective,
-    HlmAlertDialogActionButtonDirective,
-    HlmAlertDialogOverlayDirective,
     HlmButtonDirective,
   ],
   templateUrl: "./confirmation-dialog.component.html",

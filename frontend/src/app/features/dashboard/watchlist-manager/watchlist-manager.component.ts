@@ -85,7 +85,6 @@ import {
     ConfirmationDialogComponent,
     CreateWatchlistDialogComponent,
     EditWatchlistDialogComponent,
-    ChannelCardComponent,
     HlmTabsComponent,
     HlmTabsListComponent,
     HlmTabsTriggerDirective,
@@ -95,9 +94,6 @@ import {
     BrnMenuTriggerDirective,
     HlmMenuComponent,
     HlmMenuItemDirective,
-    HlmMenuGroupComponent,
-    HlmMenuLabelComponent,
-    HlmMenuSeparatorComponent,
   ],
   providers: [
     provideIcons({

@@ -35,7 +35,6 @@ import { AuthLayoutComponent } from "../../../layout";
     HlmInputDirective,
     HlmLabelDirective,
     HlmSpinnerComponent,
-    HlmToasterComponent,
     AuthLayoutComponent,
   ],
 })

@@ -28,8 +28,6 @@ import { ThemeToggleComponent } from "../../shared/components";
     HlmMenuComponent,
     HlmMenuGroupComponent,
     HlmMenuItemDirective,
-    HlmMenuItemIconDirective,
-    HlmMenuLabelComponent,
     HlmMenuSeparatorComponent,
     HlmIconDirective,
     NgIconComponent,
@@ -43,7 +41,7 @@ import { ThemeToggleComponent } from "../../shared/components";
       >
         <div class="container flex h-14 items-center justify-between">
           <h1 class="text-2xl font-bold tracking-tight">Bytecast</h1>
-          <div class="flex items-center gap-0.5">
+          <div class="flex items-center gap-1.5">
             <button
               hlmBtn
               variant="ghost"
