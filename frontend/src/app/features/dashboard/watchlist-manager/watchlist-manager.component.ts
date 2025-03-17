@@ -5,6 +5,9 @@ import {
   effect,
   inject,
   signal,
+  ViewChild,
+  QueryList,
+  ViewChildren,
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import {
@@ -34,6 +37,7 @@ import {
   Edit,
   Bell,
   ExternalLink,
+  MoreHorizontal,
 } from "lucide-angular";
 import { ColorOption } from "./watchlist-manager.interface";
 import { ConfirmationDialogComponent } from "../../../shared/components";
@@ -54,6 +58,14 @@ import {
   lucideList,
 } from "@ng-icons/lucide";
 import { Watchlist } from "../../../core/models";
+import { BrnMenuTriggerDirective } from "@spartan-ng/brain/menu";
+import {
+  HlmMenuComponent,
+  HlmMenuItemDirective,
+  HlmMenuGroupComponent,
+  HlmMenuLabelComponent,
+  HlmMenuSeparatorComponent,
+} from "@spartan-ng/ui-menu-helm";
 
 @Component({
   selector: "app-watchlist-manager",
@@ -80,6 +92,12 @@ import { Watchlist } from "../../../core/models";
     HlmTabsContentDirective,
     NgIconComponent,
     HlmIconDirective,
+    BrnMenuTriggerDirective,
+    HlmMenuComponent,
+    HlmMenuItemDirective,
+    HlmMenuGroupComponent,
+    HlmMenuLabelComponent,
+    HlmMenuSeparatorComponent,
   ],
   providers: [
     provideIcons({
@@ -100,6 +118,7 @@ export class WatchlistManagerComponent {
   readonly editIcon = Edit;
   readonly bellIcon = Bell;
   readonly externalLinkIcon = ExternalLink;
+  readonly moreIcon = MoreHorizontal;
 
   private fb = inject(FormBuilder);
   private watchlistService = inject(WatchlistService);
@@ -187,6 +206,9 @@ export class WatchlistManagerComponent {
     { value: "#ec4899", label: "Pink" },
     { value: "#f43f5e", label: "Rose" },
   ];
+
+  @ViewChildren("editWatchlistDialog")
+  editWatchlistDialogs!: QueryList<EditWatchlistDialogComponent>;
 
   constructor() {
     // Restore active watchlist from localStorage
@@ -558,5 +580,18 @@ export class WatchlistManagerComponent {
   // Get YouTube channel URL
   getYoutubeChannelUrl(channelId: string): string {
     return `https://www.youtube.com/channel/${channelId}`;
+  }
+
+  // Open edit dialog programmatically
+  openEditDialog(watchlist: Watchlist, event: MouseEvent): void {
+    event.stopPropagation();
+
+    // Find the dialog for this watchlist
+    const dialogs = this.editWatchlistDialogs.toArray();
+    const dialog = dialogs.find((d) => d.watchlist?.id === watchlist.id);
+
+    if (dialog) {
+      dialog.openDialog();
+    }
   }
 }

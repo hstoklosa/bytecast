@@ -131,25 +131,50 @@
                     >
                       {{ getChannelCount(watchlist.id) }}
                     </span>
-                    <app-edit-watchlist-dialog
-                      [watchlist]="watchlist"
-                      [disabled]="false"
-                      (watchlistUpdated)="onWatchlistUpdated()"
+                    <button
+                      hlmBtn
+                      variant="ghost"
+                      size="icon"
+                      class="h-7 w-7 opacity-50 hover:opacity-100"
+                      [brnMenuTriggerFor]="menu"
                       (click)="$event.stopPropagation()"
                     >
-                      <button
-                        hlmBtn
-                        variant="ghost"
-                        size="icon"
-                        class="h-7 w-7 opacity-50 hover:opacity-100"
-                        (click)="$event.stopPropagation()"
-                      >
-                        <lucide-angular
-                          [img]="editIcon"
-                          class="h-3.5 w-3.5"
-                        ></lucide-angular>
-                      </button>
-                    </app-edit-watchlist-dialog>
+                      <lucide-angular
+                        [img]="moreIcon"
+                        class="h-3.5 w-3.5"
+                      ></lucide-angular>
+                    </button>
+
+                    <ng-template #menu>
+                      <hlm-menu>
+                        <button
+                          hlmMenuItem
+                          class="flex items-center gap-2"
+                          (click)="openEditDialog(watchlist, $event)"
+                        >
+                          <lucide-angular
+                            [img]="editIcon"
+                            class="h-3.5 w-3.5"
+                          ></lucide-angular>
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          hlmMenuItem
+                          class="flex items-center gap-2 text-destructive focus:text-destructive"
+                          (click)="
+                            onWatchlistSelect(watchlist.id);
+                            onDeleteConfirmed();
+                            $event.stopPropagation()
+                          "
+                        >
+                          <lucide-angular
+                            [img]="trashIcon"
+                            class="h-3.5 w-3.5"
+                          ></lucide-angular>
+                          <span>Delete</span>
+                        </button>
+                      </hlm-menu>
+                    </ng-template>
                   </div>
                 </div>
                 }
@@ -403,3 +428,14 @@
     </div>
   </div>
 </hlm-tabs>
+
+<!-- Hidden edit dialog components for sidebar items -->
+@for (watchlist of watchlists(); track watchlist.id) {
+<app-edit-watchlist-dialog
+  [watchlist]="watchlist"
+  [disabled]="false"
+  (watchlistUpdated)="onWatchlistUpdated()"
+  #editWatchlistDialog
+  style="display: none"
+></app-edit-watchlist-dialog>
+}
