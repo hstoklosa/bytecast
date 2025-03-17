@@ -54,7 +54,7 @@
   <div hlmTabsContent="default">
     <!-- Default view content with sidebar layout -->
     <div
-      class="flex flex-col md:flex-row gap-6 h-[calc(100vh-350px)] min-h-[200px]"
+      class="flex flex-col md:flex-row gap-6 h-[calc(100vh-250px)] min-h-[200px]"
     >
       <!-- Sidebar Navigation -->
       <div class="w-full md:w-80 flex-shrink-0 h-full">
@@ -96,13 +96,13 @@
               />
             </div>
 
-            <div class="overflow-y-auto flex-1">
+            <div class="flex-1 h-full overflow-hidden">
               @if (filteredWatchlists().length === 0) {
               <div class="p-4 text-center text-muted-foreground text-sm">
                 No watchlists found
               </div>
               } @else {
-              <div class="space-y-1">
+              <div class="h-full overflow-y-auto pr-1 space-y-1">
                 @for (watchlist of filteredWatchlists(); track watchlist.id) {
                 <div
                   class="flex items-center justify-between px-2 py-2 rounded-md cursor-pointer"

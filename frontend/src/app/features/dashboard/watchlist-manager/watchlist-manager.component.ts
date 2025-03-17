@@ -53,6 +53,7 @@ import {
   lucideLayoutGrid,
   lucideList,
 } from "@ng-icons/lucide";
+import { Watchlist } from "../../../core/models";
 
 @Component({
   selector: "app-watchlist-manager",
@@ -109,6 +110,7 @@ export class WatchlistManagerComponent {
   readonly channels = this.watchlistService.channels;
   readonly selectedWatchlistId = signal<number | null>(null);
   readonly isEditing = signal(false);
+  readonly watchlistChannelCounts = signal<Map<number, number>>(new Map());
 
   // View mode state
   readonly viewMode = signal<"default" | "grid" | "list">("default");
@@ -201,9 +203,43 @@ export class WatchlistManagerComponent {
       .pipe(takeUntilDestroyed())
       .subscribe({
         next: (watchlists) => {
-          if (watchlists.length > 0 && !this.selectedWatchlistId()) {
-            this.selectedWatchlistId.set(watchlists[0].id);
-            this.watchlistForm.patchValue({ selectedWatchlist: watchlists[0].id });
+          // Load channel counts for all watchlists
+          this.loadAllWatchlistChannelCounts(watchlists);
+
+          // Set active watchlist after watchlists are loaded
+          if (watchlists.length > 0) {
+            let activeWatchlistId = this.selectedWatchlistId();
+
+            // If no active watchlist is set, use the first one
+            if (!activeWatchlistId) {
+              activeWatchlistId = watchlists[0].id;
+              this.selectedWatchlistId.set(activeWatchlistId);
+              this.watchlistForm.patchValue({
+                selectedWatchlist: activeWatchlistId,
+              });
+            } else {
+              // Verify the stored watchlist ID exists in the loaded watchlists
+              const watchlistExists = watchlists.some(
+                (w) => w.id === activeWatchlistId
+              );
+              if (!watchlistExists) {
+                activeWatchlistId = watchlists[0].id;
+                this.selectedWatchlistId.set(activeWatchlistId);
+                this.watchlistForm.patchValue({
+                  selectedWatchlist: activeWatchlistId,
+                });
+              }
+            }
+
+            // Set the active watchlist in the service and load its channels
+            const activeWatchlist = watchlists.find(
+              (w) => w.id === activeWatchlistId
+            );
+            if (activeWatchlist) {
+              this.watchlistService.setActiveWatchlist(activeWatchlist);
+              // Explicitly load channels for the active watchlist
+              this.refreshChannels(activeWatchlistId);
+            }
           }
         },
         error: () => {
@@ -215,10 +251,6 @@ export class WatchlistManagerComponent {
     this.watchlistForm.get("selectedWatchlist")?.valueChanges.subscribe((id) => {
       if (id !== null) {
         this.onWatchlistSelect(id);
-        const watchlist = this.watchlists()?.find((w) => w.id === id);
-        if (watchlist) {
-          this.watchlistService.setActiveWatchlist(watchlist);
-        }
       }
     });
 
@@ -233,6 +265,18 @@ export class WatchlistManagerComponent {
       if (updatedChannels) {
         // Update the watchlist service channels
         this.watchlistService.updateChannels(updatedChannels);
+      }
+    });
+
+    // Effect to update the form when the active watchlist changes
+    effect(() => {
+      const activeWatchlist = this.watchlistService.activeWatchlist();
+      if (activeWatchlist) {
+        this.selectedWatchlistId.set(activeWatchlist.id);
+        this.watchlistForm.patchValue(
+          { selectedWatchlist: activeWatchlist.id },
+          { emitEvent: false }
+        );
       }
     });
   }
@@ -251,9 +295,36 @@ export class WatchlistManagerComponent {
 
   // Get channel count for a watchlist
   getChannelCount(watchlistId: number): number {
-    // Since watchlistId doesn't exist on Channel, we'll use a hardcoded approach for now
-    // In a real implementation, this would use a proper relationship
-    return this.channels()?.length || 0;
+    // Get the count from the watchlistChannelCounts map
+    return this.watchlistChannelCounts()?.get(watchlistId) || 0;
+  }
+
+  // Load channel counts for all watchlists
+  private loadAllWatchlistChannelCounts(watchlists: Watchlist[]): void {
+    const counts = new Map<number, number>();
+
+    // Initialize all counts to 0
+    watchlists.forEach((watchlist) => {
+      counts.set(watchlist.id, 0);
+    });
+
+    // Set initial counts
+    this.watchlistChannelCounts.set(counts);
+
+    // Fetch actual counts for each watchlist
+    watchlists.forEach((watchlist) => {
+      this.channelService.getChannelsInWatchlist(watchlist.id).subscribe({
+        next: (channels) => {
+          // Update the count for this watchlist
+          const updatedCounts = new Map(this.watchlistChannelCounts());
+          updatedCounts.set(watchlist.id, channels.length);
+          this.watchlistChannelCounts.set(updatedCounts);
+        },
+        error: () => {
+          // Keep the count at 0 if there's an error
+        },
+      });
+    });
   }
 
   // Check if a channel has notifications enabled
@@ -306,8 +377,29 @@ export class WatchlistManagerComponent {
     this.selectedWatchlistId.set(id);
     if (id) {
       localStorage.setItem("activeWatchlist", id.toString());
-      // Load channels for the selected watchlist
-      this.refreshChannels(id);
+
+      // Find the watchlist object and set it as active in the service
+      const watchlist = this.watchlists()?.find((w) => w.id === id);
+      if (watchlist) {
+        // First set the active watchlist in the service
+        this.watchlistService.setActiveWatchlist(watchlist);
+
+        // Then explicitly load channels for this watchlist to ensure correct data
+        this.channelService.getChannelsInWatchlist(id).subscribe({
+          next: (channels) => {
+            // Update the channels in the watchlistService
+            this.watchlistService.updateChannels(channels);
+
+            // Update the channel count for this watchlist
+            const updatedCounts = new Map(this.watchlistChannelCounts());
+            updatedCounts.set(id, channels.length);
+            this.watchlistChannelCounts.set(updatedCounts);
+          },
+          error: () => {
+            toast.error("Failed to load channels for selected watchlist");
+          },
+        });
+      }
     } else {
       localStorage.removeItem("activeWatchlist");
       this.watchlistService.setActiveWatchlist(null);
@@ -317,12 +409,53 @@ export class WatchlistManagerComponent {
   // Handle watchlist created/updated events
   onWatchlistCreated(): void {
     // Refresh watchlists
-    this.watchlistService.refreshWatchlists().subscribe();
+    this.watchlistService.refreshWatchlists().subscribe({
+      next: (watchlists) => {
+        // Get the active watchlist from the service and set it as selected
+        const activeWatchlist = this.watchlistService.activeWatchlist();
+        if (activeWatchlist) {
+          this.selectedWatchlistId.set(activeWatchlist.id);
+          this.watchlistForm.patchValue({ selectedWatchlist: activeWatchlist.id });
+
+          // Explicitly load channels for the newly selected watchlist
+          this.channelService.getChannelsInWatchlist(activeWatchlist.id).subscribe({
+            next: (channels) => {
+              // Update the channels in the watchlistService
+              this.watchlistService.updateChannels(channels);
+
+              // Update the channel count for this watchlist
+              const updatedCounts = new Map(this.watchlistChannelCounts());
+              updatedCounts.set(activeWatchlist.id, channels.length);
+              this.watchlistChannelCounts.set(updatedCounts);
+            },
+          });
+        }
+
+        // Update channel counts for all watchlists
+        this.loadAllWatchlistChannelCounts(watchlists);
+      },
+    });
   }
 
   onWatchlistUpdated(): void {
     // Refresh watchlists
-    this.watchlistService.refreshWatchlists().subscribe();
+    this.watchlistService.refreshWatchlists().subscribe({
+      next: (watchlists) => {
+        // Update channel counts for all watchlists
+        this.loadAllWatchlistChannelCounts(watchlists);
+
+        // Refresh channels for the currently selected watchlist
+        const activeWatchlistId = this.selectedWatchlistId();
+        if (activeWatchlistId) {
+          this.channelService.getChannelsInWatchlist(activeWatchlistId).subscribe({
+            next: (channels) => {
+              // Update the channels in the watchlistService
+              this.watchlistService.updateChannels(channels);
+            },
+          });
+        }
+      },
+    });
   }
 
   /**
@@ -369,6 +502,15 @@ export class WatchlistManagerComponent {
     const watchlistId = this.selectedWatchlistId();
     if (watchlistId) {
       this.refreshChannels(watchlistId);
+
+      // Update the channel count for this watchlist
+      this.channelService.getChannelsInWatchlist(watchlistId).subscribe({
+        next: (channels) => {
+          const updatedCounts = new Map(this.watchlistChannelCounts());
+          updatedCounts.set(watchlistId, channels.length);
+          this.watchlistChannelCounts.set(updatedCounts);
+        },
+      });
     }
   }
 
@@ -377,14 +519,30 @@ export class WatchlistManagerComponent {
     const watchlistId = this.selectedWatchlistId();
     if (watchlistId) {
       this.refreshChannels(watchlistId);
+
+      // Update the channel count for this watchlist
+      this.channelService.getChannelsInWatchlist(watchlistId).subscribe({
+        next: (channels) => {
+          const updatedCounts = new Map(this.watchlistChannelCounts());
+          updatedCounts.set(watchlistId, channels.length);
+          this.watchlistChannelCounts.set(updatedCounts);
+        },
+      });
     }
   }
 
   private refreshChannels(watchlistId: number): void {
+    // This method is used to explicitly refresh channels for a watchlist
+    // and update both the watchlistService channels and the channel counts
     this.channelService.getChannelsInWatchlist(watchlistId).subscribe({
       next: (channels) => {
         // Update the channels in the watchlistService
         this.watchlistService.updateChannels(channels);
+
+        // Update the channel count for this watchlist
+        const updatedCounts = new Map(this.watchlistChannelCounts());
+        updatedCounts.set(watchlistId, channels.length);
+        this.watchlistChannelCounts.set(updatedCounts);
       },
       error: () => {
         toast.error("Failed to refresh channels");

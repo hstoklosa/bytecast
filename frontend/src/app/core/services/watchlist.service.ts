@@ -45,6 +45,8 @@ export class WatchlistService {
     return this.http.post<Watchlist>(`${this.apiUrl}/watchlists`, data).pipe(
       tap((newWatchlist) => {
         this._watchlists.update((current) => [...current, newWatchlist]);
+        this._activeWatchlist.set(newWatchlist);
+        localStorage.setItem("activeWatchlist", newWatchlist.id.toString());
         toast.success("Watchlist created successfully");
       }),
       catchError((error) => {
@@ -118,6 +120,11 @@ export class WatchlistService {
     this._activeWatchlist.set(watchlist);
     if (watchlist) {
       localStorage.setItem("activeWatchlist", watchlist.id.toString());
+
+      // Clear existing channels first to prevent showing stale data
+      this._channels.set([]);
+
+      // Then load channels for this watchlist
       this.refreshWatchlistChannels(watchlist.id);
     } else {
       localStorage.removeItem("activeWatchlist");
