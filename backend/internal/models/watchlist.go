@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"regexp"
+
 	"gorm.io/gorm"
 )
 
@@ -14,6 +15,7 @@ type Watchlist struct {
 	Description string `gorm:"type:text"`
 	Color       string `gorm:"size:7;not null;check:color ~ '^#[a-fA-F0-9]{6}$'"`
 	Channels    []*Channel `gorm:"many2many:watchlist_channels;"`
+	Videos      []*YouTubeVideo `gorm:"many2many:watchlist_videos;"`
 }
 
 // ValidateColor checks if the color is a valid hex code
