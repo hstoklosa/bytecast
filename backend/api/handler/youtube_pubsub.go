@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytecast/internal/services"
+	"io"
 	"log"
 	"net/http"
 
@@ -58,6 +59,41 @@ func (h *YouTubePubSubHandler) HandleVerification(c *gin.Context) {
 
 // HandleNotification processes incoming video notifications
 func (h *YouTubePubSubHandler) HandleNotification(c *gin.Context) {
+	// Get the signature from the X-Hub-Signature header
+	signature := c.GetHeader("X-Hub-Signature")
+	if signature == "" {
+		log.Printf("PubSub notification rejected: missing X-Hub-Signature header")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Missing X-Hub-Signature header",
+		})
+		return
+	}
+
+	log.Printf("PubSub notification received with signature: %s", signature)
+
+	// Read the request body
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		log.Printf("PubSub notification failed: unable to read request body: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Failed to read request body",
+		})
+		return
+	}
+
+	log.Printf("PubSub notification body size: %d bytes", len(body))
+
+	// Process the notification
+	if err := h.pubsubService.ProcessVideoNotification(body, signature); err != nil {
+		log.Printf("PubSub notification processing failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to process notification",
+		})
+		return
+	}
+
+	log.Printf("PubSub notification processed successfully")
+
 	// Return success response
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",

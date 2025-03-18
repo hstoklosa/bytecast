@@ -73,9 +73,19 @@ func (s *Server) Start() error {
         callbackPath := "/api/v1/pubsub/callback"
         s.router.GET(callbackPath, pubsubHandler.HandleVerification)
         s.router.POST(callbackPath, pubsubHandler.HandleNotification)
+        
+		// TODO: cron job to renew subscriptions
+		go func() {
+			for {
+				if err := pubsubService.RenewAllSubscriptions(); err != nil {
+					log.Printf("Error renewing subscriptions: %v", err)
+				}
+				
+				time.Sleep(12 * time.Hour)
+			}
+		}()
     }
 
-    // Protected routes group
     protected := s.router.Group("/api/v1")
     protected.Use(middleware.AuthMiddleware([]byte(s.cfg.JWT.Secret)))
     {
@@ -85,13 +95,24 @@ func (s *Server) Start() error {
         })
     }
 
-    // Health check route
     s.router.GET("/health", func(c *gin.Context) {
         if err := s.db.Ping(); err != nil {
             c.JSON(500, gin.H{"status": "Database error", "error": err.Error()})
             return
         }
         c.JSON(200, gin.H{"status": "OK"})
+    })
+
+    s.router.GET("/debug/pubsub", func(c *gin.Context) {
+        c.JSON(200, gin.H{
+            "status": "OK",
+            "youtube_pubsub": gin.H{
+                "callback_url": s.cfg.YouTube.CallbackURL,
+                "api_key_configured": s.cfg.YouTube.APIKey != "",
+                "pubsub_service_initialized": pubsubService != nil,
+                "routes_registered": pubsubHandler != nil,
+            },
+        })
     })
 
     // Configure HTTP server
