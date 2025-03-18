@@ -1,13 +1,17 @@
 package services
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha1"
 	"encoding/base64"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"bytecast/configs"
@@ -30,10 +34,11 @@ type PubSubService struct {
 	callbackURL   string
 	leaseSeconds  int
 	client        *http.Client
+	videoService  *VideoService
 }
 
 // NewPubSubService creates a new PubSub service instance
-func NewPubSubService(db *gorm.DB, config *configs.Config) (*PubSubService, error) {
+func NewPubSubService(db *gorm.DB, config *configs.Config, videoService *VideoService) (*PubSubService, error) {
 	if config == nil || config.YouTube.CallbackURL == "" {
 		return nil, errors.New("config with callback URL is required")
 	}
@@ -49,6 +54,7 @@ func NewPubSubService(db *gorm.DB, config *configs.Config) (*PubSubService, erro
 		callbackURL:  config.YouTube.CallbackURL,
 		leaseSeconds: leaseSeconds,
 		client:       &http.Client{Timeout: 10 * time.Second},
+		videoService: videoService,
 	}, nil
 }
 
@@ -274,3 +280,159 @@ func generateSecret() string {
 	}
 	return base64.StdEncoding.EncodeToString(secret)
 }
+
+// Feed represents the YouTube video feed XML structure
+type Feed struct {
+	XMLName xml.Name `xml:"feed"`
+	Entries []Entry  `xml:"entry"`
+}
+
+// Entry represents a video entry in the feed
+type Entry struct {
+	ID        string `xml:"id"`
+	VideoID   string `xml:"videoId"`
+	Title     string `xml:"title"`
+	Link      Link   `xml:"link"`
+	Published string `xml:"published"`
+	Updated   string `xml:"updated"`
+	Author    Author `xml:"author"`
+}
+
+// Link represents a link in the feed
+type Link struct {
+	Rel  string `xml:"rel,attr"`
+	Href string `xml:"href,attr"`
+}
+
+// Author represents the video author in the feed
+type Author struct {
+	Name      string `xml:"name"`
+	ChannelID string `xml:"channelId"`
+}
+
+// ProcessVideoNotification processes an incoming video notification
+func (s *PubSubService) ProcessVideoNotification(body []byte, signature string) error {
+	// Verify notification signature
+	channelID, err := s.verifySignature(body, signature)
+	if err != nil {
+		return fmt.Errorf("invalid notification signature: %w", err)
+	}
+
+	// Parse notification XML
+	var feed Feed
+	if err := xml.Unmarshal(body, &feed); err != nil {
+		return fmt.Errorf("failed to parse notification: %w", err)
+	}
+
+	log.Printf("Received PubSubHubbub notification for channel %s with %d entries", channelID, len(feed.Entries))
+
+	// Process each entry
+	for _, entry := range feed.Entries {
+		if err := s.processEntry(entry); err != nil {
+			// Log error but continue processing other entries
+			log.Printf("Error processing entry: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// verifySignature verifies the HMAC signature of a notification and returns the channel ID
+func (s *PubSubService) verifySignature(body []byte, signature string) (string, error) {
+	// Extract channel ID from the feed
+	var feed Feed
+	if err := xml.Unmarshal(body, &feed); err != nil || len(feed.Entries) == 0 {
+		return "", fmt.Errorf("failed to parse feed: %w", err)
+	}
+	
+	channelID := feed.Entries[0].Author.ChannelID
+	if channelID == "" {
+		return "", errors.New("channel ID not found in feed")
+	}
+
+	// Get subscription secret for this channel
+	var subscription models.YouTubeSubscription
+	if err := s.db.Where("channel_id = ?", channelID).First(&subscription).Error; err != nil {
+		return "", fmt.Errorf("subscription not found: %w", err)
+	}
+
+	// Calculate HMAC
+	mac := hmac.New(sha1.New, []byte(subscription.Secret))
+	mac.Write(body)
+	expectedSignature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+
+	if signature != expectedSignature {
+		return "", errors.New("signature mismatch")
+	}
+
+	return channelID, nil
+}
+
+// extractVideoID extracts the video ID from the entry ID
+func (s *PubSubService) extractVideoID(entryID string) string {
+	// Entry ID format: yt:video:VIDEO_ID
+	parts := strings.Split(entryID, ":")
+	if len(parts) < 3 {
+		return ""
+	}
+	return parts[2]
+}
+
+// generateThumbnailURL generates the URL for the video thumbnail
+func (s *PubSubService) generateThumbnailURL(videoID string) string {
+	return fmt.Sprintf("https://img.youtube.com/vi/%s/maxresdefault.jpg", videoID)
+}
+
+// processEntry processes a single feed entry
+func (s *PubSubService) processEntry(entry Entry) error {
+	// Extract video ID from the entry ID
+	videoID := s.extractVideoID(entry.ID)
+	if videoID == "" {
+		return fmt.Errorf("failed to extract video ID from entry ID: %s", entry.ID)
+	}
+
+	// Find the channel in the database by YouTube channel ID
+	var channel models.Channel
+	if err := s.db.Where("you_tube_id = ?", entry.Author.ChannelID).First(&channel).Error; err != nil {
+		return fmt.Errorf("channel not found: %w", err)
+	}
+
+	// Parse published date
+	publishedAt, err := time.Parse(time.RFC3339, entry.Published)
+	if err != nil {
+		publishedAt = time.Now()
+	}
+
+	// Create a new YouTube video
+	video := &models.YouTubeVideo{
+		YouTubeID:    videoID,
+		ChannelID:    channel.ID,
+		Title:        entry.Title,
+		PublishedAt:  publishedAt,
+		ThumbnailURL: s.generateThumbnailURL(videoID),
+	}
+
+	// Create or update video using the video service
+	if err := s.videoService.CreateVideo(video); err != nil {
+		return fmt.Errorf("failed to save video: %w", err)
+	}
+
+	// Find all watchlists that contain this channel
+	var watchlists []models.Watchlist
+	if err := s.db.Joins("JOIN watchlist_channels ON watchlist_channels.watchlist_id = watchlists.id").
+		Where("watchlist_channels.channel_id = ?", channel.ID).
+		Find(&watchlists).Error; err != nil {
+		return fmt.Errorf("failed to find watchlists: %w", err)
+	}
+
+	// Add video to each watchlist
+	for _, watchlist := range watchlists {
+		if err := s.db.Model(&watchlist).Association("Videos").Append(video); err != nil {
+			// Log error but continue with other watchlists
+			log.Printf("Error adding video to watchlist %d: %v", watchlist.ID, err)
+		}
+	}
+
+	log.Printf("Successfully processed new video: %s (%s)", video.Title, videoID)
+	return nil
+} 
