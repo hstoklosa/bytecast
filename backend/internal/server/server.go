@@ -40,25 +40,40 @@ func New(cfg *configs.Config, db *database.Connection) *Server {
 
 // Start initializes and starts the server with graceful shutdown
 func (s *Server) Start() error {
-    // Get the underlying gorm.DB instance
     db := s.db.DB()
 
-    // Initialize services
+    videoService := services.NewVideoService(db)
+    
+    // Initialize PubSub service (making it optional)
+    pubsubService, err := services.NewPubSubService(db, s.cfg, videoService)
+    if err != nil {
+        log.Printf("Warning: Failed to initialize PubSub service: %v", err)
+    }
+    
     watchlistService := services.NewWatchlistService(db, s.cfg)
+    if pubsubService != nil {
+        watchlistService.SetPubSubService(pubsubService)
+    }
+    
     authService := services.NewAuthService(db, watchlistService, s.cfg.JWT.Secret)
-
-    // Initialize route handlers
     authHandler := handler.NewAuthHandler(authService, s.cfg)
     watchlistHandler := handler.NewWatchlistHandler(watchlistService)
-
-    // Register routes
-    authHandler.RegisterRoutes(s.router)
     
-    // Auth middleware for protected routes
+    var pubsubHandler *handler.YouTubePubSubHandler
+    if pubsubService != nil {
+        pubsubHandler = handler.NewYouTubePubSubHandler(pubsubService)
+    }
+    
     authMiddleware := middleware.AuthMiddleware([]byte(s.cfg.JWT.Secret))
     
-    // Register watchlist routes with auth middleware
+    authHandler.RegisterRoutes(s.router)
     watchlistHandler.RegisterRoutes(s.router, authMiddleware)
+
+    if pubsubHandler != nil {
+        callbackPath := "/api/v1/pubsub/callback"
+        s.router.GET(callbackPath, pubsubHandler.HandleVerification)
+        s.router.POST(callbackPath, pubsubHandler.HandleNotification)
+    }
 
     // Protected routes group
     protected := s.router.Group("/api/v1")
@@ -80,7 +95,6 @@ func (s *Server) Start() error {
     })
 
     // Configure HTTP server
-
     s.server = &http.Server{
         Addr:    "0.0.0.0:" + s.cfg.Server.Port,
         Handler: s.router,
@@ -119,5 +133,5 @@ func (s *Server) Start() error {
         }
     }
 
-	    return nil
+    return nil
 }
