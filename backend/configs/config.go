@@ -96,7 +96,7 @@ func Load() (*Config, error) {
         },
         YouTube: YouTube{
             APIKey:       getEnvWithDefault("YOUTUBE_API_KEY", ""),
-            CallbackURL:  getEnvWithDefault("YOUTUBE_CALLBACK_URL", "https://localhost/api/v1/pubsub/callback"),
+            CallbackURL:  getEnvWithDefault("YOUTUBE_CALLBACK_URL", ""),
             LeaseSeconds: getEnvInt("YOUTUBE_LEASE_SECONDS", 432000), // Default 5 days (max 10 days)
         },
     }
