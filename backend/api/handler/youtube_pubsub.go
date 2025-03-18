@@ -58,7 +58,6 @@ func (h *YouTubePubSubHandler) HandleVerification(c *gin.Context) {
 
 // HandleNotification processes incoming video notifications
 func (h *YouTubePubSubHandler) HandleNotification(c *gin.Context) {
-
 	// Return success response
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
