@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -21,8 +22,8 @@ import (
 )
 
 const (
-	pubsubHubURL = "https://pubsubhubbub.appspot.com/subscribe"
-	feedURL      = "https://www.youtube.com/feeds/videos.xml?channel_id=%s"
+	hubURL  = "https://pubsubhubbub.appspot.com/subscribe"
+	feedURL = "https://www.youtube.com/xml/feeds/videos.xml?channel_id=%s"
 )
 
 // ErrPubSubHubError is returned when there's an error communicating with the PubSubHubbub hub
@@ -61,7 +62,6 @@ func (s *PubSubService) SubscribeToChannel(channelID string) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		subscription = models.YouTubeSubscription{
 			ChannelID:     channelID,
-			ChannelTitle:  "", // updated when we receive notifications
 			LeaseSeconds:  s.config.YouTube.LeaseSeconds,
 			ExpiresAt:     time.Now().Add(time.Duration(s.config.YouTube.LeaseSeconds) * time.Second),
 			Secret:        generateSecret(),
@@ -78,7 +78,6 @@ func (s *PubSubService) SubscribeToChannel(channelID string) error {
 		existing.LeaseSeconds = s.config.YouTube.LeaseSeconds
 		existing.ExpiresAt = time.Now().Add(time.Duration(s.config.YouTube.LeaseSeconds) * time.Second)
 		existing.IsActive = true
-		existing.LastVerifiedAt = time.Now()
 		
 		if err := s.db.Save(&existing).Error; err != nil {
 			return fmt.Errorf("failed to update subscription record: %w", err)
@@ -89,7 +88,7 @@ func (s *PubSubService) SubscribeToChannel(channelID string) error {
 	}
 
 	// Subscribe to the hub (if fails then keep the subscription record in the database)
-	err = s.subscribeToHub(channelID)
+	err = s.sendSubscriptionRequest(channelID, "subscribe")
 	if err != nil {
 		log.Printf("Failed to subscribe to hub for channel %s: %v", channelID, err)
 		return nil
@@ -111,117 +110,60 @@ func (s *PubSubService) UnsubscribeFromChannel(channelID string) error {
 		return fmt.Errorf("database error when finding subscription: %w", err)
 	}
 
-	// Mark as inactive but don't delete yet
 	subscription.IsActive = false
 	if err := s.db.Save(&subscription).Error; err != nil {
 		return fmt.Errorf("failed to mark subscription as inactive: %w", err)
 	}
 	
-	log.Printf("Marked subscription for channel %s as inactive", channelID)
-
 	// Send unsubscribe request to hub
-	err := s.unsubscribeFromHub(channelID)
+	err := s.sendSubscriptionRequest(channelID, "unsubscribe")
 	if err != nil {
 		log.Printf("Failed to unsubscribe from hub for channel %s: %v", channelID, err)
-	} else {
-		log.Printf("Successfully sent hub unsubscription request for channel %s", channelID)
-	}
+	} 
 
-	// Now we can delete the subscription
 	if err := s.db.Delete(&subscription).Error; err != nil {
 		return fmt.Errorf("failed to delete subscription record: %w", err)
 	}
 	
-	log.Printf("Deleted subscription record for channel %s", channelID)
 	return nil
 }
 
-// subscribeToHub sends a subscription request to the PubSubHubbub hub
-func (s *PubSubService) subscribeToHub(channelID string) error {
+func (s *PubSubService) sendSubscriptionRequest(channelID, mode string) error {
 	feedURL := fmt.Sprintf(feedURL, channelID)
+	callbackURL := s.config.YouTube.CallbackURL
 	
-	req, err := http.NewRequest("POST", pubsubHubURL, nil)
-	if err != nil {
-		return err
-	}
+	form := url.Values{}
+	form.Set("hub.callback", callbackURL)
+	form.Set("hub.mode", mode)
+	form.Set("hub.topic", feedURL)
+	form.Set("hub.verify", "async")
 
-	q := req.URL.Query()
-	q.Add("hub.callback", s.config.YouTube.CallbackURL)
-	q.Add("hub.topic", feedURL)
-	q.Add("hub.verify", "sync")
-	q.Add("hub.mode", "subscribe")
-	q.Add("hub.lease_seconds", fmt.Sprintf("%d", s.config.YouTube.LeaseSeconds))
-	req.URL.RawQuery = q.Encode()
-
-	// Send request
-	resp, err := s.client.Do(req)
+	resp, err := s.client.PostForm(hubURL, form)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
-	// 204 No Content is a success response for PubSubHubbub
-	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusOK {
-		log.Printf("Successful subscription request for channel %s (status: %d)", channelID, resp.StatusCode)
-		return nil
-	}
-
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("%w: subscription failed with status %d: %s", ErrPubSubHubError, resp.StatusCode, string(body))
 	}
 
-	return nil
-}
-
-// unsubscribeFromHub sends an unsubscribe request to the PubSubHubbub hub
-func (s *PubSubService) unsubscribeFromHub(channelID string) error {
-	feedURL := fmt.Sprintf(feedURL, channelID)
-	
-	// Prepare unsubscribe request
-	req, err := http.NewRequest("POST", pubsubHubURL, nil)
-	if err != nil {
-		return err
-	}
-
-	q := req.URL.Query()
-	q.Add("hub.callback", s.config.YouTube.CallbackURL)
-	q.Add("hub.topic", feedURL)
-	q.Add("hub.verify", "sync")
-	q.Add("hub.mode", "unsubscribe")
-	req.URL.RawQuery = q.Encode()
-
-	// Send request
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	// 204 No Content is a success response for PubSubHubbub
-	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusOK {
-		log.Printf("Successful unsubscription request for channel %s (status: %d)", channelID, resp.StatusCode)
-		return nil
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%w: unsubscribe failed with status %d: %s", ErrPubSubHubError, resp.StatusCode, string(body))
-	}
+	log.Printf("Successfully sent hub %s request for channel %s", mode, channelID)
 
 	return nil
 }
 
-// generateSecret generates a random secret for HMAC verification
+// generateSecret generates a random secret for HMAC verification 
+// with a fallback method if crypto/rand fails
 func generateSecret() string {
-	// Generate a cryptographically secure random 32-byte secret
 	secret := make([]byte, 32)
 	if _, err := rand.Read(secret); err != nil {
-		// Fallback to less secure method if crypto/rand fails
 		for i := range secret {
 			secret[i] = byte(i * 7)
 		}
 	}
+
 	return base64.StdEncoding.EncodeToString(secret)
 }
 
@@ -237,9 +179,9 @@ type Entry struct {
 	VideoID   string `xml:"videoId"`
 	Title     string `xml:"title"`
 	Link      Link   `xml:"link"`
+	Author    Author `xml:"author"`
 	Published string `xml:"published"`
 	Updated   string `xml:"updated"`
-	Author    Author `xml:"author"`
 }
 
 // Link represents a link in the feed
@@ -256,7 +198,6 @@ type Author struct {
 
 // ProcessVideoNotification processes an incoming video notification
 func (s *PubSubService) ProcessVideoNotification(body []byte, signature string) error {
-	// Verify notification signature
 	channelID, err := s.verifySignature(body, signature)
 	if err != nil {
 		return fmt.Errorf("invalid notification signature: %w", err)
@@ -273,7 +214,6 @@ func (s *PubSubService) ProcessVideoNotification(body []byte, signature string) 
 	// Process each entry
 	for _, entry := range feed.Entries {
 		if err := s.processEntry(entry); err != nil {
-			// Log error but continue processing other entries
 			log.Printf("Error processing entry: %v", err)
 		}
 	}
@@ -283,7 +223,6 @@ func (s *PubSubService) ProcessVideoNotification(body []byte, signature string) 
 
 // verifySignature verifies the HMAC signature of a notification and returns the channel ID
 func (s *PubSubService) verifySignature(body []byte, signature string) (string, error) {
-	// Extract channel ID from the feed
 	var feed Feed
 	if err := xml.Unmarshal(body, &feed); err != nil || len(feed.Entries) == 0 {
 		return "", fmt.Errorf("failed to parse feed: %w", err)
@@ -294,7 +233,7 @@ func (s *PubSubService) verifySignature(body []byte, signature string) (string, 
 		return "", errors.New("channel ID not found in feed")
 	}
 
-	// Get subscription secret for this channel
+	// Get subscription secret for the ChannelID
 	var subscription models.YouTubeSubscription
 	if err := s.db.Where("channel_id = ?", channelID).First(&subscription).Error; err != nil {
 		return "", fmt.Errorf("subscription not found: %w", err)
@@ -337,7 +276,7 @@ func (s *PubSubService) processEntry(entry Entry) error {
 
 	// Find the channel in the database by YouTube channel ID
 	var channel models.Channel
-	if err := s.db.Where("you_tube_id = ?", entry.Author.ChannelID).First(&channel).Error; err != nil {
+	if err := s.db.Where("youtube_id = ?", entry.Author.ChannelID).First(&channel).Error; err != nil {
 		return fmt.Errorf("channel not found: %w", err)
 	}
 
@@ -349,7 +288,7 @@ func (s *PubSubService) processEntry(entry Entry) error {
 
 	// Create a new YouTube video
 	video := &models.YouTubeVideo{
-		YouTubeID:    videoID,
+		YoutubeID:    videoID,
 		ChannelID:    channel.ID,
 		Title:        entry.Title,
 		PublishedAt:  publishedAt,
