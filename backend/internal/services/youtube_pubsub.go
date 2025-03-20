@@ -30,55 +30,41 @@ var ErrPubSubHubError = errors.New("error communicating with PubSubHubbub hub")
 
 // PubSubService handles YouTube channel subscriptions via PubSubHubbub
 type PubSubService struct {
-	db            *gorm.DB
-	callbackURL   string
-	leaseSeconds  int
-	client        *http.Client
-	videoService  *VideoService
+	db           *gorm.DB
+	config       *configs.Config
+	client       *http.Client
+	videoService *VideoService
 }
 
 // NewPubSubService creates a new PubSub service instance
-func NewPubSubService(db *gorm.DB, config *configs.Config, videoService *VideoService) (*PubSubService, error) {
-	if config == nil || config.YouTube.CallbackURL == "" {
-		return nil, errors.New("config with callback URL is required")
-	}
-
-	leaseSeconds := config.YouTube.LeaseSeconds
-	if leaseSeconds <= 0 {
-		// Default to 5 days if not specified (YouTube's maximum is 10 days)
-		leaseSeconds = 432000
-	}
-
+func NewPubSubService(db *gorm.DB, config *configs.Config, videoService *VideoService) *PubSubService {
 	return &PubSubService{
 		db:           db,
-		callbackURL:  config.YouTube.CallbackURL,
-		leaseSeconds: leaseSeconds,
+		config:       config,
 		client:       &http.Client{Timeout: 10 * time.Second},
 		videoService: videoService,
-	}, nil
+	}
 }
 
 // SubscribeToChannel subscribes to a YouTube channel's notifications
 func (s *PubSubService) SubscribeToChannel(channelID string) error {
-	// Check if subscription already exists
 	var existing models.YouTubeSubscription
 	err := s.db.Where("channel_id = ?", channelID).First(&existing).Error
 	
+	// Errors other than "not found"
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		// Database error other than "not found"
 		return fmt.Errorf("database error checking for existing subscription: %w", err)
 	}
 	
 	var subscription models.YouTubeSubscription
 	
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		// Create new subscription
 		subscription = models.YouTubeSubscription{
 			ChannelID:     channelID,
-			ChannelTitle:  "", // Will be updated when we receive notifications
-			LeaseSeconds:  s.leaseSeconds,
-			ExpiresAt:     time.Now().Add(time.Duration(s.leaseSeconds) * time.Second),
-			Secret:        generateSecret(), // Generate a random secret for verification
+			ChannelTitle:  "", // updated when we receive notifications
+			LeaseSeconds:  s.config.YouTube.LeaseSeconds,
+			ExpiresAt:     time.Now().Add(time.Duration(s.config.YouTube.LeaseSeconds) * time.Second),
+			Secret:        generateSecret(),
 			IsActive:      true,
 		}
 		
@@ -89,8 +75,8 @@ func (s *PubSubService) SubscribeToChannel(channelID string) error {
 		log.Printf("Created new subscription record for channel %s", channelID)
 	} else {
 		// Subscription exists, update it
-		existing.LeaseSeconds = s.leaseSeconds
-		existing.ExpiresAt = time.Now().Add(time.Duration(s.leaseSeconds) * time.Second)
+		existing.LeaseSeconds = s.config.YouTube.LeaseSeconds
+		existing.ExpiresAt = time.Now().Add(time.Duration(s.config.YouTube.LeaseSeconds) * time.Second)
 		existing.IsActive = true
 		existing.LastVerifiedAt = time.Now()
 		
@@ -102,12 +88,9 @@ func (s *PubSubService) SubscribeToChannel(channelID string) error {
 		log.Printf("Updated existing subscription record for channel %s", channelID)
 	}
 
-	// Subscribe to the hub
-	// If this fails, we still keep the subscription record in the database
-	// but we'll log the error
+	// Subscribe to the hub (if fails then keep the subscription record in the database)
 	err = s.subscribeToHub(channelID)
 	if err != nil {
-		// Log the error but don't return it - we want to continue with the channel addition
 		log.Printf("Failed to subscribe to hub for channel %s: %v", channelID, err)
 		return nil
 	}
@@ -118,14 +101,13 @@ func (s *PubSubService) SubscribeToChannel(channelID string) error {
 
 // UnsubscribeFromChannel unsubscribes from a YouTube channel's notifications
 func (s *PubSubService) UnsubscribeFromChannel(channelID string) error {
-	// Find the subscription
 	var subscription models.YouTubeSubscription
 	if err := s.db.Where("channel_id = ?", channelID).First(&subscription).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Nothing to unsubscribe from
-			log.Printf("No subscription record found for channel %s, nothing to unsubscribe", channelID)
+			log.Printf("No subscription record found for channel %s", channelID)
 			return nil
 		}
+
 		return fmt.Errorf("database error when finding subscription: %w", err)
 	}
 
@@ -141,8 +123,6 @@ func (s *PubSubService) UnsubscribeFromChannel(channelID string) error {
 	err := s.unsubscribeFromHub(channelID)
 	if err != nil {
 		log.Printf("Failed to unsubscribe from hub for channel %s: %v", channelID, err)
-		// Don't return the error - we want to delete the subscription regardless
-		// of whether the unsubscribe request succeeded
 	} else {
 		log.Printf("Successfully sent hub unsubscription request for channel %s", channelID)
 	}
@@ -181,8 +161,8 @@ func (s *PubSubService) RenewAllSubscriptions() error {
 // renewSubscription renews a single subscription
 func (s *PubSubService) renewSubscription(sub models.YouTubeSubscription) error {
 	// Update subscription in database
-	sub.LeaseSeconds = s.leaseSeconds
-	sub.ExpiresAt = time.Now().Add(time.Duration(s.leaseSeconds) * time.Second)
+	sub.LeaseSeconds = s.config.YouTube.LeaseSeconds
+	sub.ExpiresAt = time.Now().Add(time.Duration(s.config.YouTube.LeaseSeconds) * time.Second)
 	if err := s.db.Save(&sub).Error; err != nil {
 		return err
 	}
@@ -195,18 +175,17 @@ func (s *PubSubService) renewSubscription(sub models.YouTubeSubscription) error 
 func (s *PubSubService) subscribeToHub(channelID string) error {
 	feedURL := fmt.Sprintf(feedURL, channelID)
 	
-	// Prepare subscription request
 	req, err := http.NewRequest("POST", pubsubHubURL, nil)
 	if err != nil {
 		return err
 	}
 
 	q := req.URL.Query()
-	q.Add("hub.callback", s.callbackURL)
+	q.Add("hub.callback", s.config.YouTube.CallbackURL)
 	q.Add("hub.topic", feedURL)
 	q.Add("hub.verify", "sync")
 	q.Add("hub.mode", "subscribe")
-	q.Add("hub.lease_seconds", fmt.Sprintf("%d", s.leaseSeconds))
+	q.Add("hub.lease_seconds", fmt.Sprintf("%d", s.config.YouTube.LeaseSeconds))
 	req.URL.RawQuery = q.Encode()
 
 	// Send request
@@ -241,7 +220,7 @@ func (s *PubSubService) unsubscribeFromHub(channelID string) error {
 	}
 
 	q := req.URL.Query()
-	q.Add("hub.callback", s.callbackURL)
+	q.Add("hub.callback", s.config.YouTube.CallbackURL)
 	q.Add("hub.topic", feedURL)
 	q.Add("hub.verify", "sync")
 	q.Add("hub.mode", "unsubscribe")

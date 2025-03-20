@@ -1,23 +1,17 @@
 package server
 
 import (
+	"bytecast/internal/services"
 	"log"
 	"time"
-
-	"bytecast/internal/services"
 )
 
 func (s *Server) initServices() error {
 	db := s.db.DB()
 	
 	s.videoService = services.NewVideoService(db)
-	pubsubService, err := services.NewPubSubService(db, s.cfg, s.videoService)
-	if err != nil {
-		log.Printf("Warning: Failed to initialize PubSub service: %v", err)
-	} else {
-		s.pubsubService = pubsubService
-		go s.runSubscriptionRenewal()
-	}
+	s.pubsubService = services.NewPubSubService(db, s.cfg, s.videoService)
+	go s.runSubscriptionRenewal()
 	
 	s.watchlistService = services.NewWatchlistService(db, s.cfg)
 	if s.pubsubService != nil {
