@@ -136,41 +136,6 @@ func (s *PubSubService) UnsubscribeFromChannel(channelID string) error {
 	return nil
 }
 
-// RenewAllSubscriptions renews all active subscriptions that are close to expiring
-func (s *PubSubService) RenewAllSubscriptions() error {
-	// Find subscriptions that need renewal (expiring within 24 hours)
-	var subscriptions []models.YouTubeSubscription
-	if err := s.db.Where("is_active = ? AND expires_at <= ?", true, time.Now().Add(24*time.Hour)).Find(&subscriptions).Error; err != nil {
-		return err
-	}
-
-	log.Printf("Renewing %d YouTube PubSubHubbub subscriptions", len(subscriptions))
-
-	// Renew each subscription
-	for _, sub := range subscriptions {
-		if err := s.renewSubscription(sub); err != nil {
-			log.Printf("Error renewing subscription for channel %s: %v", sub.ChannelID, err)
-			continue
-		}
-		log.Printf("Successfully renewed subscription for channel %s", sub.ChannelID)
-	}
-
-	return nil
-}
-
-// renewSubscription renews a single subscription
-func (s *PubSubService) renewSubscription(sub models.YouTubeSubscription) error {
-	// Update subscription in database
-	sub.LeaseSeconds = s.config.YouTube.LeaseSeconds
-	sub.ExpiresAt = time.Now().Add(time.Duration(s.config.YouTube.LeaseSeconds) * time.Second)
-	if err := s.db.Save(&sub).Error; err != nil {
-		return err
-	}
-
-	// Resubscribe to the channel
-	return s.subscribeToHub(sub.ChannelID)
-}
-
 // subscribeToHub sends a subscription request to the PubSubHubbub hub
 func (s *PubSubService) subscribeToHub(channelID string) error {
 	feedURL := fmt.Sprintf(feedURL, channelID)
