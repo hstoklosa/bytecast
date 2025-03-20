@@ -1,13 +1,14 @@
 package handler
 
 import (
-    "net/http"
-    "time"
+	"net/http"
+	"time"
 
-    "github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
 
-    "bytecast/configs"
-    "bytecast/internal/services"
+	"bytecast/api/middleware"
+	"bytecast/configs"
+	"bytecast/internal/services"
 )
 
 type registerRequest struct {
@@ -22,14 +23,16 @@ type loginRequest struct {
 }
 
 type AuthHandler struct {
-    authService *services.AuthService
-    config      *configs.Config
+    authService   *services.AuthService
+    config        *configs.Config
+    authMiddleware gin.HandlerFunc
 }
 
 func NewAuthHandler(authService *services.AuthService, config *configs.Config) *AuthHandler {
     return &AuthHandler{
-        authService: authService,
-        config:      config,
+        authService:   authService,
+        config:        config,
+        authMiddleware: middleware.AuthMiddleware([]byte(config.JWT.Secret)),
     }
 }
 
@@ -59,6 +62,12 @@ func (h *AuthHandler) RegisterRoutes(r *gin.Engine) {
         auth.POST("/login", h.login)
         auth.POST("/refresh", h.refresh)
         auth.POST("/logout", h.logout)
+    }
+
+    protected := r.Group("/api/v1/auth")
+    protected.Use(h.authMiddleware)
+    {
+        protected.GET("/me", h.me)
     }
 }
 
@@ -188,4 +197,9 @@ func (h *AuthHandler) logout(c *gin.Context) {
     )
 
     c.Status(http.StatusNoContent)
+}
+
+func (h *AuthHandler) me(c *gin.Context) {
+    userID, _ := c.Get("user_id")
+    c.JSON(http.StatusOK, gin.H{"user_id": userID})
 }

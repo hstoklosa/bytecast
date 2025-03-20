@@ -21,6 +21,13 @@ func NewYouTubePubSubHandler(pubsubService *services.PubSubService) *YouTubePubS
 	}
 }
 
+// RegisterRoutes registers all PubSubHubbub routes
+func (h *YouTubePubSubHandler) RegisterRoutes(r *gin.Engine) {
+	callbackPath := "/api/v1/pubsub/callback"
+	r.GET(callbackPath, h.HandleVerification)
+	r.POST(callbackPath, h.HandleNotification)
+}
+
 // HandleVerification handles the initial subscription verification request
 func (h *YouTubePubSubHandler) HandleVerification(c *gin.Context) {
 	// Get verification parameters
@@ -39,15 +46,12 @@ func (h *YouTubePubSubHandler) HandleVerification(c *gin.Context) {
 		return
 	}
 
-	// Handle different verification modes
 	switch mode {
 	case "subscribe":
 		log.Printf("PubSub subscribe verification success: echoing challenge")
-		// Echo the challenge string
 		c.String(http.StatusOK, challenge)
 	case "unsubscribe":
 		log.Printf("PubSub unsubscribe verification success: echoing challenge")
-		// Echo the challenge string
 		c.String(http.StatusOK, challenge)
 	default:
 		log.Printf("PubSub verification failed: invalid mode '%s'", mode)
@@ -83,7 +87,6 @@ func (h *YouTubePubSubHandler) HandleNotification(c *gin.Context) {
 
 	log.Printf("PubSub notification body size: %d bytes", len(body))
 
-	// Process the notification
 	if err := h.pubsubService.ProcessVideoNotification(body, signature); err != nil {
 		log.Printf("PubSub notification processing failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -94,7 +97,6 @@ func (h *YouTubePubSubHandler) HandleNotification(c *gin.Context) {
 
 	log.Printf("PubSub notification processed successfully")
 
-	// Return success response
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 	})
