@@ -51,33 +51,16 @@ type YouTube struct {
 
 // Load returns a validated configuration struct
 func Load() (*Config, error) {
-    // Try multiple possible locations for .env file
-    envPaths := []string{
-        ".env",                // Current directory
-        "../.env",             // One level up
-        "../../.env",          // Two levels up
-        "../../../.env",       // Three levels up (original path)
-    }
-    
-    envLoaded := false
-    for _, path := range envPaths {
-        if err := godotenv.Load(path); err == nil {
-            log.Printf("Loaded .env file from %s", path)
-            envLoaded = true
-            break
-        }
-    }
-    
-    if !envLoaded {
-        log.Printf("Note: .env file not found, using environment variables")
-    }
+	if err := godotenv.Load("../../.env"); err != nil {
+		log.Printf("Note: .env file not found, using environment variables")
+	}
 
     // Map environment variables to match docker-compose naming
     cfg := &Config{
         Superuser: Superuser{
             Username: getEnvWithDefault("SUPERUSER_USERNAME", "admin"),
             Email:    getEnvWithDefault("SUPERUSER_EMAIL", "admin@example.com"),
-            Password: getEnvWithDefault("SUPERUSER_PASSWORD", ""),
+            Password: getEnvWithDefault("SUPERUSER_PASSWORD", "password"),
         },
         Database: Database{
             Host:     getEnvWithDefault("DB_HOST", getEnvWithDefault("POSTGRES_HOST", "localhost")),
@@ -96,29 +79,24 @@ func Load() (*Config, error) {
         },
         YouTube: YouTube{
             APIKey:       getEnvWithDefault("YOUTUBE_API_KEY", ""),
-            CallbackURL:  getEnvWithDefault("YOUTUBE_CALLBACK_URL", ""),
-            LeaseSeconds: getEnvInt("YOUTUBE_LEASE_SECONDS", 432000), // Default 5 days (max 10 days)
+            CallbackURL:  getEnvWithDefault("YOUTUBE_WEBSUB_CALLBACK_URL", ""),
+            LeaseSeconds: getEnvInt("YOUTUBE_WEBSUB_LEASE_SECONDS", 432000), // Default 5 days (max 10 days)
         },
     }
 
-    // Check JWT secret before validation
     if cfg.JWT.Secret == "" {
         log.Printf("Warning: JWT_SECRET not set")
     }
     
-    // Log YouTube API key status
     if cfg.YouTube.APIKey == "" {
         log.Printf("Warning: YOUTUBE_API_KEY not set, YouTube API features will be disabled")
     }
 
-    // Validate entire configuration
     if err := validateConfig(cfg); err != nil {
         return nil, fmt.Errorf("config validation error: %w", err)
     }
 
-    // Log successful configuration (but don't expose the secret)
     log.Printf("Configuration loaded successfully")
-
     return cfg, nil
 }
 

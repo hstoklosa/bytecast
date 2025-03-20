@@ -173,11 +173,11 @@ func (s *WatchlistService) AddChannelToWatchlist(watchlistID, userID uint, chann
 
 	// Check if channel already exists in database
 	var channel models.Channel
-	err = s.db.Where("you_tube_id = ?", channelInfo.ID).First(&channel).Error
+	err = s.db.Where("youtube_id = ?", channelInfo.ID).First(&channel).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		// Create new channel with data from YouTube API
 		channel = models.Channel{
-			YouTubeID:     channelInfo.ID,
+			YoutubeID:     channelInfo.ID,
 			Title:         channelInfo.Title,
 			Description:   channelInfo.Description,
 			ThumbnailURL:  channelInfo.Thumbnail,
@@ -212,7 +212,7 @@ func (s *WatchlistService) AddChannelToWatchlist(watchlistID, userID uint, chann
 	err = s.db.Model(&models.Watchlist{}).
 		Joins("JOIN watchlist_channels ON watchlist_channels.watchlist_id = watchlists.id").
 		Joins("JOIN channels ON watchlist_channels.channel_id = channels.id").
-		Where("watchlists.id = ? AND channels.you_tube_id = ?", watchlistID, channelInfo.ID).
+		Where("watchlists.id = ? AND channels.youtube_id = ?", watchlistID, channelInfo.ID).
 		Count(&exists).Error
 	
 	if err != nil {
@@ -239,7 +239,6 @@ func (s *WatchlistService) RemoveChannelFromWatchlist(watchlistID, userID uint, 
 	// Try to extract channel ID if it's a URL and YouTube service is available
 	extractedID := channelID
 	if s.youtubeService != nil && (strings.Contains(channelID, "/") || strings.Contains(channelID, "@")) {
-		// Try to get channel info to extract the proper ID
 		channelInfo, err := s.youtubeService.GetChannelInfo(channelID)
 		if err == nil && channelInfo != nil {
 			extractedID = channelInfo.ID
@@ -248,7 +247,7 @@ func (s *WatchlistService) RemoveChannelFromWatchlist(watchlistID, userID uint, 
 
 	// Find channel
 	var channel models.Channel
-	if err := s.db.Where("you_tube_id = ?", extractedID).First(&channel).Error; err != nil {
+	if err := s.db.Where("youtube_id = ?", extractedID).First(&channel).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrChannelNotFound
 		}
@@ -266,15 +265,11 @@ func (s *WatchlistService) RemoveChannelFromWatchlist(watchlistID, userID uint, 
 		Joins("JOIN watchlist_channels ON watchlist_channels.watchlist_id = watchlists.id").
 		Where("watchlist_channels.channel_id = ?", channel.ID).
 		Count(&usageCount).Error; err != nil {
-		// Log error but continue
 		log.Printf("Error checking channel usage: %v", err)
-	} else if usageCount == 0 && s.pubsubService != nil {
+	} else if usageCount == 0 {
 		// If channel is no longer used by any watchlist, unsubscribe from PubSubHubbub
 		if err := s.pubsubService.UnsubscribeFromChannel(extractedID); err != nil {
-			// Log error but continue
 			log.Printf("Warning: Failed to unsubscribe from YouTube PubSubHubbub for channel %s: %v", extractedID, err)
-		} else {
-			log.Printf("Successfully unsubscribed from YouTube PubSubHubbub for channel %s", extractedID)
 		}
 	}
 	

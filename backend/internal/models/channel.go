@@ -7,7 +7,7 @@ import (
 // Channel represents a YouTube channel that can be added to watchlists
 type Channel struct {
 	gorm.Model
-	YouTubeID    string `gorm:"uniqueIndex;size:255;not null"` // YouTube channel ID
+	YoutubeID    string `gorm:"uniqueIndex;size:255;not null"` // YouTube channel ID
 	Title        string `gorm:"size:255;not null"`             // Channel title
 	Description  string `gorm:"type:text"`                     // Channel description
 	ThumbnailURL string `gorm:"size:512"`                      // URL to channel thumbnail

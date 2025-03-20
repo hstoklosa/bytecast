@@ -532,9 +532,9 @@ func TestExtractYouTubeChannelID(t *testing.T) {
 				// If valid ID, should create a channel with that ID
 				if assert.NoError(t, err) {
 					var channel models.Channel
-					err = db.Where("you_tube_id = ?", tt.want).First(&channel).Error
+					err = db.Where("youtube_id = ?", tt.want).First(&channel).Error
 					assert.NoError(t, err)
-					assert.Equal(t, tt.want, channel.YouTubeID)
+					assert.Equal(t, tt.want, channel.YoutubeID)
 				}
 			}
 		})
@@ -559,7 +559,7 @@ func TestAddChannelToWatchlist(t *testing.T) {
 	
 	// Create a test channel
 	channel := &models.Channel{
-		YouTubeID: "UC_existing",
+		YoutubeID: "UC_existing",
 		Title:     "Existing Channel",
 	}
 	result = db.Create(channel)
@@ -636,7 +636,7 @@ func TestAddChannelToWatchlist(t *testing.T) {
 			
 			// Verify channel exists in database
 			var channel models.Channel
-			err = db.Where("you_tube_id = ?", tt.channelID).First(&channel).Error
+			err = db.Where("youtube_id = ?", tt.channelID).First(&channel).Error
 			assert.NoError(t, err)
 		})
 	}
@@ -660,14 +660,14 @@ func TestRemoveChannelFromWatchlist(t *testing.T) {
 	
 	// Create test channels
 	channel1 := &models.Channel{
-		YouTubeID: "UC_channel1",
+		YoutubeID: "UC_channel1",
 		Title:     "Channel 1",
 	}
 	result = db.Create(channel1)
 	require.NoError(t, result.Error)
 	
 	channel2 := &models.Channel{
-		YouTubeID: "UC_channel2",
+		YoutubeID: "UC_channel2",
 		Title:     "Channel 2",
 	}
 	result = db.Create(channel2)
@@ -733,7 +733,7 @@ func TestRemoveChannelFromWatchlist(t *testing.T) {
 			err = db.Model(&wl).Association("Channels").Find(&channels)
 			assert.NoError(t, err)
 			for _, ch := range channels {
-				assert.NotEqual(t, tt.channelID, ch.YouTubeID)
+				assert.NotEqual(t, tt.channelID, ch.YoutubeID)
 			}
 		})
 	}
@@ -767,9 +767,9 @@ func TestGetChannelsInWatchlist(t *testing.T) {
 	
 	// Create test channels
 	channels := []*models.Channel{
-		{YouTubeID: "UC_channel1", Title: "Channel 1"},
-		{YouTubeID: "UC_channel2", Title: "Channel 2"},
-		{YouTubeID: "UC_channel3", Title: "Channel 3"},
+		{YoutubeID: "UC_channel1", Title: "Channel 1"},
+		{YoutubeID: "UC_channel2", Title: "Channel 2"},
+		{YoutubeID: "UC_channel3", Title: "Channel 3"},
 	}
 	
 	for _, ch := range channels {
@@ -834,10 +834,10 @@ func TestGetChannelsInWatchlist(t *testing.T) {
 			assert.Len(t, channels, tt.want)
 			
 			if tt.watchlistID == watchlist.ID {
-				assert.Equal(t, "UC_channel1", channels[0].YouTubeID)
-				assert.Equal(t, "UC_channel2", channels[1].YouTubeID)
+				assert.Equal(t, "UC_channel1", channels[0].YoutubeID)
+				assert.Equal(t, "UC_channel2", channels[1].YoutubeID)
 			} else if tt.watchlistID == watchlist2.ID {
-				assert.Equal(t, "UC_channel3", channels[0].YouTubeID)
+				assert.Equal(t, "UC_channel3", channels[0].YoutubeID)
 			}
 		})
 	}
