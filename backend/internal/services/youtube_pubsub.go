@@ -238,6 +238,20 @@ func (s *PubSubService) ProcessVideoNotification(body []byte, signature string) 
 
 // verifySignature verifies the HMAC signature of a notification and returns the channel ID
 func (s *PubSubService) verifySignature(body []byte, signature string) (string, error) {
+	// Get the signature from the header - handle both formats
+	actualSignature := signature
+	if strings.HasPrefix(signature, "sha1=") {
+		hexSignature := signature[5:]
+		// Decode hex to bytes
+		decodedBytes, err := hex.DecodeString(hexSignature)
+		if err != nil {
+			return "", fmt.Errorf("invalid signature format: %w", err)
+		}
+		// Encode bytes to base64 to match our format
+		actualSignature = base64.StdEncoding.EncodeToString(decodedBytes)
+	}
+
+	// Parse feed to get channelID - needed to find the right secret
 	var feed Feed
 	if err := xml.Unmarshal(body, &feed); err != nil {
 		return "", fmt.Errorf("failed to parse feed: %w", err)
@@ -264,21 +278,8 @@ func (s *PubSubService) verifySignature(body []byte, signature string) (string, 
 	mac.Write(body)
 	expectedSignature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 
-	// Remove sha1= prefix and decode hex signature
-	actualSignature := signature
-	if strings.HasPrefix(signature, "sha1=") {
-		hexSignature := signature[5:]
-		// Decode hex to bytes
-		decodedBytes, err := hex.DecodeString(hexSignature)
-		if err != nil {
-			return "", fmt.Errorf("invalid signature format: %w", err)
-		}
-		// Encode bytes to base64 to match our format
-		actualSignature = base64.StdEncoding.EncodeToString(decodedBytes)
-	}
-
 	if actualSignature != expectedSignature {
-		log.Printf("Signature mismatch. Expected: %s, Got: %s", expectedSignature, signature)
+		log.Printf("Signature mismatch. Expected: %s, Got: %s", expectedSignature, actualSignature)
 		return "", errors.New("signature mismatch")
 	}
 
@@ -295,7 +296,16 @@ func (s *PubSubService) processEntry(entry Entry) error {
 	videoID := entry.VideoID
 	
 	if videoID == "" {
-		return fmt.Errorf("failed to extract video ID from entry ID: %s", entry.ID)
+		// Try to extract from entry.ID if VideoID is empty
+		// Example format: yt:video:VIDEO_ID
+		parts := strings.Split(entry.ID, ":")
+		if len(parts) == 3 && parts[0] == "yt" && parts[1] == "video" {
+			videoID = parts[2]
+		}
+		
+		if videoID == "" {
+			return fmt.Errorf("failed to extract video ID from entry")
+		}
 	}
 
 	// Find the channel in the database by YouTube channel ID
@@ -307,21 +317,39 @@ func (s *PubSubService) processEntry(entry Entry) error {
 	// Parse published date
 	publishedAt, err := time.Parse(time.RFC3339, entry.Published)
 	if err != nil {
-		// publishedAt = time.Now()
 		return fmt.Errorf("failed to parse published date: %w", err)
 	}
 
 	// Get video details from YouTube API
-	videoDetails, err := s.youtubeService.GetVideoDetails(videoID)
-	if err != nil {
-		// Log the error but continue with basic video info
-		log.Printf("Warning: Failed to fetch video details from YouTube API: %v", err)
+	var videoDetails *VideoDetails
+	if s.youtubeService != nil {
+		videoDetails, err = s.youtubeService.GetVideoDetails(videoID)
+		if err != nil {
+			// Log error but continue with basic info
+			log.Printf("Warning: Failed to fetch video details from YouTube API: %v", err)
+		}
+	}
+	
+	// Use available info or fallback to basic info
+	if videoDetails == nil {
 		videoDetails = &VideoDetails{
 			ID:        videoID,
 			Title:     entry.Title,
 			Thumbnail: s.generateThumbnailURL(videoID),
 		}
 	}
+
+	// Start a transaction for video creation and watchlist association
+	tx := s.db.Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("failed to start transaction: %w", tx.Error)
+	}
+	
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
 
 	// Create a new YouTube video
 	video := &models.YouTubeVideo{
@@ -334,25 +362,67 @@ func (s *PubSubService) processEntry(entry Entry) error {
 		PublishedAt:  publishedAt,
 	}
 
-	// Create or update video using the video service
-	if err := s.videoService.CreateVideo(video); err != nil {
-		return fmt.Errorf("failed to save video: %w", err)
+	// Create or update video 
+	var existingVideo models.YouTubeVideo
+	if err := tx.Where("youtube_id = ?", videoID).First(&existingVideo).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			tx.Rollback()
+			return fmt.Errorf("database error: %w", err)
+		}
+		
+		// Create new video
+		if err := tx.Create(video).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to save video: %w", err)
+		}
+	} else {
+		// Update existing video
+		existingVideo.Title = videoDetails.Title
+		existingVideo.Description = videoDetails.Description
+		existingVideo.ThumbnailURL = videoDetails.Thumbnail
+		existingVideo.Duration = videoDetails.Duration
+		if !publishedAt.IsZero() {
+			existingVideo.PublishedAt = publishedAt
+		}
+		
+		if err := tx.Save(&existingVideo).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to update video: %w", err)
+		}
+		
+		// Use the existing video for watchlist associations
+		video = &existingVideo
 	}
 
 	// Find all watchlists that contain this channel
 	var watchlists []models.Watchlist
-	if err := s.db.Joins("JOIN watchlist_channels ON watchlist_channels.watchlist_id = watchlists.id").
+	if err := tx.Joins("JOIN watchlist_channels ON watchlist_channels.watchlist_id = watchlists.id").
 		Where("watchlist_channels.channel_id = ?", channel.ID).
 		Find(&watchlists).Error; err != nil {
+		tx.Rollback()
 		return fmt.Errorf("failed to find watchlists: %w", err)
 	}
 
 	// Add video to each watchlist
 	for _, watchlist := range watchlists {
-		if err := s.db.Model(&watchlist).Association("Videos").Append(video); err != nil {
-			log.Printf("Error adding video to watchlist %d: %v", watchlist.ID, err)
-		} 
+		// Check if video is already in watchlist
+		var count int64
+		if err := tx.Model(&models.Watchlist{}).
+			Joins("JOIN watchlist_videos ON watchlist_videos.watchlist_id = watchlists.id").
+			Where("watchlists.id = ? AND watchlist_videos.you_tube_video_id = ?", watchlist.ID, video.ID).
+			Count(&count).Error; err != nil {
+			log.Printf("Warning: Error checking if video exists in watchlist: %v", err)
+			continue
+		}
+		
+		if count == 0 {
+			if err := tx.Exec("INSERT INTO watchlist_videos (watchlist_id, you_tube_video_id) VALUES (?, ?)", 
+				watchlist.ID, video.ID).Error; err != nil {
+				log.Printf("Error adding video to watchlist %d: %v", watchlist.ID, err)
+				continue
+			}
+		}
 	}
 
-	return nil
+	return tx.Commit().Error
 } 

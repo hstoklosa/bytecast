@@ -42,4 +42,9 @@ func (y *YouTubeSubscription) BeforeCreate(tx *gorm.DB) error {
 	y.SubscribedAt = time.Now()
 	y.IsActive = true
 	return nil
+}
+
+// TableName specifies the table name for the YouTubeSubscription model
+func (YouTubeSubscription) TableName() string {
+	return "you_tube_subscriptions"
 } 
