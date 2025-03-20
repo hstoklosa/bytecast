@@ -3,6 +3,7 @@ package handler
 import (
 	"bytecast/internal/services"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,10 @@ type YouTubePubSubHandler struct {
 
 // NewYouTubePubSubHandler creates a new PubSubHubbub handler
 func NewYouTubePubSubHandler(pubsubService *services.PubSubService) *YouTubePubSubHandler {
+	if pubsubService == nil {
+		log.Printf("PubSub service is nil")
+	}
+
 	return &YouTubePubSubHandler{
 		pubsubService: pubsubService,
 	}

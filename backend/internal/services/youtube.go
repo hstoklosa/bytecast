@@ -35,6 +35,15 @@ type ChannelInfo struct {
 	Thumbnail   string
 }
 
+// VideoDetails contains the essential information about a YouTube video
+type VideoDetails struct {
+	ID          string
+	Title       string
+	Description string
+	Thumbnail   string
+	Duration    string
+}
+
 // NewYouTubeService creates a new YouTube service
 func NewYouTubeService(config *configs.Config) (*YouTubeService, error) {
 	if config == nil {
@@ -205,4 +214,50 @@ func (s *YouTubeService) ExtractChannelID(input string) (string, error) {
 	}
 
 	return "", ErrInvalidYouTubeURL
+}
+
+// GetVideoDetails retrieves video information from YouTube API
+func (s *YouTubeService) GetVideoDetails(videoID string) (*VideoDetails, error) {
+	ctx := context.Background()
+	
+	// Create the YouTube service with the API key
+	youtubeService, err := youtube.NewService(ctx, option.WithAPIKey(s.apiKey))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrYouTubeAPIError, err)
+	}
+
+	// Get video details
+	call := youtubeService.Videos.List([]string{"snippet", "contentDetails"}).Id(videoID)
+	response, err := call.Do()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrYouTubeAPIError, err)
+	}
+
+	if len(response.Items) == 0 {
+		return nil, fmt.Errorf("video not found")
+	}
+
+	video := response.Items[0]
+	
+	// Get the highest quality thumbnail available
+	thumbnailURL := ""
+	if video.Snippet.Thumbnails != nil {
+		if video.Snippet.Thumbnails.Maxres != nil {
+			thumbnailURL = video.Snippet.Thumbnails.Maxres.Url
+		} else if video.Snippet.Thumbnails.High != nil {
+			thumbnailURL = video.Snippet.Thumbnails.High.Url
+		} else if video.Snippet.Thumbnails.Medium != nil {
+			thumbnailURL = video.Snippet.Thumbnails.Medium.Url
+		} else if video.Snippet.Thumbnails.Default != nil {
+			thumbnailURL = video.Snippet.Thumbnails.Default.Url
+		}
+	}
+
+	return &VideoDetails{
+		ID:          video.Id,
+		Title:       video.Snippet.Title,
+		Description: video.Snippet.Description,
+		Thumbnail:   thumbnailURL,
+		Duration:    video.ContentDetails.Duration,
+	}, nil
 } 

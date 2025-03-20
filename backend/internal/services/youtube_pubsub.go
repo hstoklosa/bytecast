@@ -32,19 +32,26 @@ var ErrPubSubHubError = errors.New("error communicating with PubSubHubbub hub")
 
 // PubSubService handles YouTube channel subscriptions via PubSubHubbub
 type PubSubService struct {
-	db           *gorm.DB
-	config       *configs.Config
-	client       *http.Client
-	videoService *VideoService
+	db             *gorm.DB
+	config         *configs.Config
+	client         *http.Client
+	videoService   *VideoService
+	youtubeService *YouTubeService
 }
 
 // NewPubSubService creates a new PubSub service instance
 func NewPubSubService(db *gorm.DB, config *configs.Config, videoService *VideoService) *PubSubService {
+	youtubeService, err := NewYouTubeService(config)
+	if err != nil {
+		log.Printf("Failed to create YouTube service: %v", err)
+	}
+
 	return &PubSubService{
-		db:           db,
-		config:       config,
-		client:       &http.Client{Timeout: 10 * time.Second},
-		videoService: videoService,
+		db:             db,
+		config:         config,
+		client:         &http.Client{Timeout: 10 * time.Second},
+		videoService:   videoService,
+		youtubeService: youtubeService,
 	}
 }
 
@@ -304,13 +311,27 @@ func (s *PubSubService) processEntry(entry Entry) error {
 		return fmt.Errorf("failed to parse published date: %w", err)
 	}
 
+	// Get video details from YouTube API
+	videoDetails, err := s.youtubeService.GetVideoDetails(videoID)
+	if err != nil {
+		// Log the error but continue with basic video info
+		log.Printf("Warning: Failed to fetch video details from YouTube API: %v", err)
+		videoDetails = &VideoDetails{
+			ID:        videoID,
+			Title:     entry.Title,
+			Thumbnail: s.generateThumbnailURL(videoID),
+		}
+	}
+
 	// Create a new YouTube video
 	video := &models.YouTubeVideo{
 		YoutubeID:    videoID,
 		ChannelID:    channel.ID,
-		Title:        entry.Title,
+		Title:        videoDetails.Title,
+		Description:  videoDetails.Description,
+		ThumbnailURL: videoDetails.Thumbnail,
+		Duration:     videoDetails.Duration,
 		PublishedAt:  publishedAt,
-		ThumbnailURL: s.generateThumbnailURL(videoID),
 	}
 
 	// Create or update video using the video service
