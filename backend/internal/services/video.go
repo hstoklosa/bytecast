@@ -26,7 +26,7 @@ func NewVideoService(db *gorm.DB) *VideoService {
 func (s *VideoService) CreateVideo(video *models.YouTubeVideo) error {
 	// Check if video already exists
 	var existingVideo models.YouTubeVideo
-	if err := s.db.Where("youtube_id = ?", video.YouTubeID).First(&existingVideo).Error; err == nil {
+	if err := s.db.Where("youtube_id = ?", video.YoutubeID).First(&existingVideo).Error; err == nil {
 		// Video already exists, update it instead
 		return s.UpdateVideo(video)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -78,7 +78,7 @@ func (s *VideoService) GetRecentVideos(since time.Time) ([]models.YouTubeVideo, 
 // UpdateVideo updates an existing YouTube video
 func (s *VideoService) UpdateVideo(video *models.YouTubeVideo) error {
 	var existingVideo models.YouTubeVideo
-	if err := s.db.Where("youtube_id = ?", video.YouTubeID).First(&existingVideo).Error; err != nil {
+	if err := s.db.Where("youtube_id = ?", video.YoutubeID).First(&existingVideo).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("video not found")
 		}

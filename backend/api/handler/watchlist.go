@@ -52,7 +52,7 @@ func validateHexColor(fl validator.FieldLevel) bool {
 
 type channelResponse struct {
 	ID          uint   `json:"id"`
-	YouTubeID   string `json:"youtube_id"`
+	YoutubeID   string `json:"youtube_id"`
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
 	Thumbnail   string `json:"thumbnail_url,omitempty"`
@@ -358,7 +358,7 @@ func watchlistToResponse(watchlist *models.Watchlist) watchlistResponse {
 func channelToResponse(channel *models.Channel) channelResponse {
 	return channelResponse{
 		ID:          channel.ID,
-		YouTubeID:   channel.YouTubeID,
+		YoutubeID:   channel.YoutubeID,
 		Title:       channel.Title,
 		Description: channel.Description,
 		Thumbnail:   channel.ThumbnailURL,
