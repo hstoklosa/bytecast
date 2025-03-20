@@ -51,6 +51,9 @@ func (c *Connection) RunMigrations() error {
         &models.RevokedToken{},
         &models.Channel{},
         &models.Watchlist{},
+        &models.YouTubeSubscription{},
+        &models.UserYouTubeSubscription{},
+        &models.YouTubeVideo{},
     ); err != nil {
         return fmt.Errorf("failed to run migrations: %w", err)
     }

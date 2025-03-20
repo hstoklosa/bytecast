@@ -40,27 +40,52 @@ func New(cfg *configs.Config, db *database.Connection) *Server {
 
 // Start initializes and starts the server with graceful shutdown
 func (s *Server) Start() error {
-    // Get the underlying gorm.DB instance
     db := s.db.DB()
 
-    // Initialize services
+    videoService := services.NewVideoService(db)
+    
+    // Initialize PubSub service (making it optional)
+    pubsubService, err := services.NewPubSubService(db, s.cfg, videoService)
+    if err != nil {
+        log.Printf("Warning: Failed to initialize PubSub service: %v", err)
+    }
+    
     watchlistService := services.NewWatchlistService(db, s.cfg)
+    if pubsubService != nil {
+        watchlistService.SetPubSubService(pubsubService)
+    }
+    
     authService := services.NewAuthService(db, watchlistService, s.cfg.JWT.Secret)
-
-    // Initialize route handlers
     authHandler := handler.NewAuthHandler(authService, s.cfg)
     watchlistHandler := handler.NewWatchlistHandler(watchlistService)
-
-    // Register routes
-    authHandler.RegisterRoutes(s.router)
     
-    // Auth middleware for protected routes
+    var pubsubHandler *handler.YouTubePubSubHandler
+    if pubsubService != nil {
+        pubsubHandler = handler.NewYouTubePubSubHandler(pubsubService)
+    }
+    
     authMiddleware := middleware.AuthMiddleware([]byte(s.cfg.JWT.Secret))
     
-    // Register watchlist routes with auth middleware
+    authHandler.RegisterRoutes(s.router)
     watchlistHandler.RegisterRoutes(s.router, authMiddleware)
 
-    // Protected routes group
+    if pubsubHandler != nil {
+        callbackPath := "/api/v1/pubsub/callback"
+        s.router.GET(callbackPath, pubsubHandler.HandleVerification)
+        s.router.POST(callbackPath, pubsubHandler.HandleNotification)
+        
+		// TODO: cron job to renew subscriptions
+		go func() {
+			for {
+				if err := pubsubService.RenewAllSubscriptions(); err != nil {
+					log.Printf("Error renewing subscriptions: %v", err)
+				}
+				
+				time.Sleep(12 * time.Hour)
+			}
+		}()
+    }
+
     protected := s.router.Group("/api/v1")
     protected.Use(middleware.AuthMiddleware([]byte(s.cfg.JWT.Secret)))
     {
@@ -70,7 +95,6 @@ func (s *Server) Start() error {
         })
     }
 
-    // Health check route
     s.router.GET("/health", func(c *gin.Context) {
         if err := s.db.Ping(); err != nil {
             c.JSON(500, gin.H{"status": "Database error", "error": err.Error()})
@@ -79,8 +103,19 @@ func (s *Server) Start() error {
         c.JSON(200, gin.H{"status": "OK"})
     })
 
-    // Configure HTTP server
+    s.router.GET("/debug/pubsub", func(c *gin.Context) {
+        c.JSON(200, gin.H{
+            "status": "OK",
+            "youtube_pubsub": gin.H{
+                "callback_url": s.cfg.YouTube.CallbackURL,
+                "api_key_configured": s.cfg.YouTube.APIKey != "",
+                "pubsub_service_initialized": pubsubService != nil,
+                "routes_registered": pubsubHandler != nil,
+            },
+        })
+    })
 
+    // Configure HTTP server
     s.server = &http.Server{
         Addr:    "0.0.0.0:" + s.cfg.Server.Port,
         Handler: s.router,
@@ -119,5 +154,5 @@ func (s *Server) Start() error {
         }
     }
 
-	    return nil
+    return nil
 }

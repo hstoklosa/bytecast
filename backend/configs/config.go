@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/joho/godotenv"
@@ -43,7 +44,9 @@ type Server struct {
 }
 
 type YouTube struct {
-    APIKey string
+    APIKey       string
+    CallbackURL  string
+    LeaseSeconds int
 }
 
 // Load returns a validated configuration struct
@@ -92,7 +95,9 @@ func Load() (*Config, error) {
             Domain:      getEnvWithDefault("APP_DOMAIN", "localhost"),
         },
         YouTube: YouTube{
-            APIKey: getEnvWithDefault("YOUTUBE_API_KEY", ""),
+            APIKey:       getEnvWithDefault("YOUTUBE_API_KEY", ""),
+            CallbackURL:  getEnvWithDefault("YOUTUBE_CALLBACK_URL", ""),
+            LeaseSeconds: getEnvInt("YOUTUBE_LEASE_SECONDS", 432000), // Default 5 days (max 10 days)
         },
     }
 
@@ -128,6 +133,16 @@ func (d *Database) GetDSN() string {
 func getEnvWithDefault(key, defaultValue string) string {
     if value := os.Getenv(key); value != "" {
         return value
+    }
+    return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+    if value := os.Getenv(key); value != "" {
+        intValue, err := strconv.Atoi(value)
+        if err == nil {
+            return intValue
+        }
     }
     return defaultValue
 }

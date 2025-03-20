@@ -18,16 +18,29 @@ var (
 	ErrInvalidYouTubeID  = errors.New("invalid YouTube channel ID or URL")
 )
 
+// YouTubeServiceInterface defines the interface for YouTube service
+type YouTubeServiceInterface interface {
+	GetChannelInfo(channelID string) (*ChannelInfo, error)
+}
+
+// PubSubServiceInterface defines the interface for YouTube PubSubHubbub operations
+type PubSubServiceInterface interface {
+	SubscribeToChannel(channelID string) error
+	UnsubscribeFromChannel(channelID string) error
+}
+
 // WatchlistService handles operations related to watchlists and channels
 type WatchlistService struct {
 	db             *gorm.DB
 	youtubeService YouTubeServiceInterface
+	pubsubService  PubSubServiceInterface
 	config         *configs.Config
 }
 
 // NewWatchlistService creates a new watchlist service
 func NewWatchlistService(db *gorm.DB, config *configs.Config) *WatchlistService {
 	var youtubeService YouTubeServiceInterface
+	var pubsubService PubSubServiceInterface
 	
 	// Only try to initialize YouTube service if API key is provided
 	if config != nil && config.YouTube.APIKey != "" {
@@ -44,6 +57,7 @@ func NewWatchlistService(db *gorm.DB, config *configs.Config) *WatchlistService 
 	return &WatchlistService{
 		db:             db,
 		youtubeService: youtubeService,
+		pubsubService:  pubsubService,
 		config:         config,
 	}
 }
@@ -171,6 +185,16 @@ func (s *WatchlistService) AddChannelToWatchlist(watchlistID, userID uint, chann
 		if err := s.db.Create(&channel).Error; err != nil {
 			return err
 		}
+		
+		// Subscribe to channel in PubSubHubbub if service is available
+		if s.pubsubService != nil {
+			if err := s.pubsubService.SubscribeToChannel(channelInfo.ID); err != nil {
+				// Log the error but continue - we can still add the channel to the watchlist
+				log.Printf("Warning: Failed to subscribe to YouTube PubSubHubbub for channel %s: %v", channelInfo.ID, err)
+			} else {
+				log.Printf("Successfully subscribed to YouTube PubSubHubbub for channel %s", channelInfo.ID)
+			}
+		}
 	} else if err != nil {
 		return err
 	} else {
@@ -232,7 +256,29 @@ func (s *WatchlistService) RemoveChannelFromWatchlist(watchlistID, userID uint, 
 	}
 
 	// Remove channel from watchlist
-	return s.db.Model(watchlist).Association("Channels").Delete(&channel)
+	if err := s.db.Model(watchlist).Association("Channels").Delete(&channel); err != nil {
+		return err
+	}
+	
+	// Check if this channel is still being used by other watchlists
+	var usageCount int64
+	if err := s.db.Model(&models.Watchlist{}).
+		Joins("JOIN watchlist_channels ON watchlist_channels.watchlist_id = watchlists.id").
+		Where("watchlist_channels.channel_id = ?", channel.ID).
+		Count(&usageCount).Error; err != nil {
+		// Log error but continue
+		log.Printf("Error checking channel usage: %v", err)
+	} else if usageCount == 0 && s.pubsubService != nil {
+		// If channel is no longer used by any watchlist, unsubscribe from PubSubHubbub
+		if err := s.pubsubService.UnsubscribeFromChannel(extractedID); err != nil {
+			// Log error but continue
+			log.Printf("Warning: Failed to unsubscribe from YouTube PubSubHubbub for channel %s: %v", extractedID, err)
+		} else {
+			log.Printf("Successfully unsubscribed from YouTube PubSubHubbub for channel %s", extractedID)
+		}
+	}
+	
+	return nil
 }
 
 // GetChannelsInWatchlist retrieves all channels in a watchlist
@@ -250,12 +296,12 @@ func (s *WatchlistService) GetChannelsInWatchlist(watchlistID, userID uint) ([]m
 	return channels, nil
 }
 
-// YouTubeServiceInterface defines the interface for YouTube service
-type YouTubeServiceInterface interface {
-	GetChannelInfo(channelID string) (*ChannelInfo, error)
-}
-
 // SetYouTubeService sets the YouTube service (used for testing)
 func (s *WatchlistService) SetYouTubeService(youtubeService YouTubeServiceInterface) {
 	s.youtubeService = youtubeService
+}
+
+// SetPubSubService sets the PubSub service
+func (s *WatchlistService) SetPubSubService(pubsubService PubSubServiceInterface) {
+	s.pubsubService = pubsubService
 }
