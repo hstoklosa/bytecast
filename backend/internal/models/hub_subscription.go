@@ -6,8 +6,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// YouTubeSubscription represents a subscription to a YouTube channel
-type YouTubeSubscription struct {
+/*
+ * HubSubscription represents a subscription to a YouTube's WebSub hub to
+ * receive notifications when a new video is uploaded to a channel.
+ */
+type HubSubscription struct {
 	gorm.Model
 	ChannelID      string    `gorm:"uniqueIndex;not null" json:"channel_id"`
 	SubscribedAt   time.Time `json:"subscribed_at"`
@@ -17,14 +20,12 @@ type YouTubeSubscription struct {
 	Secret         string    `json:"-"`
 }
 
-// BeforeCreate is a GORM hook that sets the SubscribedAt timestamp
-func (y *YouTubeSubscription) BeforeCreate(tx *gorm.DB) error {
+func (y *HubSubscription) BeforeCreate(tx *gorm.DB) error {
 	y.SubscribedAt = time.Now()
 	y.IsActive = true
 	return nil
 }
 
-// TableName specifies the table name for the YouTubeSubscription model
-func (YouTubeSubscription) TableName() string {
-	return "you_tube_subscriptions"
+func (HubSubscription) TableName() string {
+	return "hub_subscriptions"
 } 

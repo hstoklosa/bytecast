@@ -23,7 +23,7 @@ func NewVideoService(db *gorm.DB) *VideoService {
 }
 
 // CreateVideo creates a new YouTube video in the database
-func (s *VideoService) CreateVideo(video *models.YouTubeVideo) error {
+func (s *VideoService) CreateVideo(video *models.Video) error {
 	// Start a transaction
 	tx := s.db.Begin()
 	if tx.Error != nil {
@@ -37,7 +37,7 @@ func (s *VideoService) CreateVideo(video *models.YouTubeVideo) error {
 	}()
 
 	// Check if video already exists
-	var existingVideo models.YouTubeVideo
+	var existingVideo models.Video
 	if err := tx.Where("youtube_id = ?", video.YoutubeID).First(&existingVideo).Error; err == nil {
 		// Video already exists, update it
 		existingVideo.Title = video.Title
@@ -70,8 +70,8 @@ func (s *VideoService) CreateVideo(video *models.YouTubeVideo) error {
 }
 
 // GetVideoByID retrieves a YouTube video by its ID
-func (s *VideoService) GetVideoByID(videoID string) (*models.YouTubeVideo, error) {
-	var video models.YouTubeVideo
+func (s *VideoService) GetVideoByID(videoID string) (*models.Video, error) {
+	var video models.Video
 	if err := s.db.Where("youtube_id = ?", videoID).First(&video).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("video not found")
@@ -83,8 +83,8 @@ func (s *VideoService) GetVideoByID(videoID string) (*models.YouTubeVideo, error
 }
 
 // GetVideosByChannelID retrieves all videos from a specific channel
-func (s *VideoService) GetVideosByChannelID(channelID uint) ([]models.YouTubeVideo, error) {
-	var videos []models.YouTubeVideo
+func (s *VideoService) GetVideosByChannelID(channelID uint) ([]models.Video, error) {
+	var videos []models.Video
 	if err := s.db.Where("channel_id = ?", channelID).Find(&videos).Error; err != nil {
 		return nil, fmt.Errorf("failed to get videos for channel: %w", err)
 	}
@@ -93,8 +93,8 @@ func (s *VideoService) GetVideosByChannelID(channelID uint) ([]models.YouTubeVid
 }
 
 // GetRecentVideos retrieves videos published within a specified time period
-func (s *VideoService) GetRecentVideos(since time.Time) ([]models.YouTubeVideo, error) {
-	var videos []models.YouTubeVideo
+func (s *VideoService) GetRecentVideos(since time.Time) ([]models.Video, error) {
+	var videos []models.Video
 	if err := s.db.Where("published_at > ?", since).Order("published_at DESC").Find(&videos).Error; err != nil {
 		return nil, fmt.Errorf("failed to get recent videos: %w", err)
 	}
@@ -103,8 +103,8 @@ func (s *VideoService) GetRecentVideos(since time.Time) ([]models.YouTubeVideo, 
 }
 
 // UpdateVideo updates an existing YouTube video
-func (s *VideoService) UpdateVideo(video *models.YouTubeVideo) error {
-	var existingVideo models.YouTubeVideo
+func (s *VideoService) UpdateVideo(video *models.Video) error {
+	var existingVideo models.Video
 	if err := s.db.Where("youtube_id = ?", video.YoutubeID).First(&existingVideo).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("video not found")
@@ -122,7 +122,7 @@ func (s *VideoService) UpdateVideo(video *models.YouTubeVideo) error {
 
 // DeleteVideo removes a YouTube video from the database
 func (s *VideoService) DeleteVideo(videoID string) error {
-	if err := s.db.Where("youtube_id = ?", videoID).Delete(&models.YouTubeVideo{}).Error; err != nil {
+	if err := s.db.Where("youtube_id = ?", videoID).Delete(&models.Video{}).Error; err != nil {
 		return fmt.Errorf("failed to delete video: %w", err)
 	}
 
@@ -144,7 +144,7 @@ func (s *VideoService) AddVideoToWatchlist(videoID string, watchlistID uint) err
 	}()
 
 	// Get the video
-	var video models.YouTubeVideo
+	var video models.Video
 	if err := tx.Where("youtube_id = ?", videoID).First(&video).Error; err != nil {
 		tx.Rollback()
 		return fmt.Errorf("video not found: %w", err)
@@ -160,7 +160,7 @@ func (s *VideoService) AddVideoToWatchlist(videoID string, watchlistID uint) err
 	// Check if the video is already in the watchlist
 	var count int64
 	if err := tx.Table("watchlist_videos").
-		Where("you_tube_video_id = ? AND watchlist_id = ?", video.ID, watchlistID).
+		Where("video_id = ? AND watchlist_id = ?", video.ID, watchlistID).
 		Count(&count).Error; err != nil {
 		tx.Rollback()
 		return fmt.Errorf("failed to check watchlist: %w", err)
@@ -168,7 +168,7 @@ func (s *VideoService) AddVideoToWatchlist(videoID string, watchlistID uint) err
 
 	if count == 0 {
 		// Add the video to the watchlist using direct SQL
-		if err := tx.Exec("INSERT INTO watchlist_videos (watchlist_id, you_tube_video_id) VALUES (?, ?)", 
+		if err := tx.Exec("INSERT INTO watchlist_videos (watchlist_id, video_id) VALUES (?, ?)", 
 			watchlistID, video.ID).Error; err != nil {
 			tx.Rollback()
 			return fmt.Errorf("failed to add video to watchlist: %w", err)
@@ -193,7 +193,7 @@ func (s *VideoService) RemoveVideoFromWatchlist(videoID string, watchlistID uint
 	}()
 
 	// Get the video
-	var video models.YouTubeVideo
+	var video models.Video
 	if err := tx.Where("youtube_id = ?", videoID).First(&video).Error; err != nil {
 		tx.Rollback()
 		return fmt.Errorf("video not found: %w", err)
@@ -207,7 +207,7 @@ func (s *VideoService) RemoveVideoFromWatchlist(videoID string, watchlistID uint
 	}
 
 	// Remove the video from the watchlist using direct SQL for efficiency
-	if err := tx.Exec("DELETE FROM watchlist_videos WHERE watchlist_id = ? AND you_tube_video_id = ?",
+	if err := tx.Exec("DELETE FROM watchlist_videos WHERE watchlist_id = ? AND video_id = ?",
 		watchlistID, video.ID).Error; err != nil {
 		tx.Rollback()
 		return fmt.Errorf("failed to remove video from watchlist: %w", err)
@@ -217,9 +217,9 @@ func (s *VideoService) RemoveVideoFromWatchlist(videoID string, watchlistID uint
 }
 
 // GetVideosByWatchlistID retrieves all videos in a specific watchlist
-func (s *VideoService) GetVideosByWatchlistID(watchlistID uint) ([]models.YouTubeVideo, error) {
-	var videos []models.YouTubeVideo
-	if err := s.db.Joins("JOIN watchlist_videos ON watchlist_videos.you_tube_video_id = youtube_videos.id").
+func (s *VideoService) GetVideosByWatchlistID(watchlistID uint) ([]models.Video, error) {
+	var videos []models.Video
+	if err := s.db.Joins("JOIN watchlist_videos ON watchlist_videos.video_id = youtube_videos.id").
 		Where("watchlist_videos.watchlist_id = ?", watchlistID).
 		Find(&videos).Error; err != nil {
 		return nil, fmt.Errorf("failed to get videos for watchlist: %w", err)

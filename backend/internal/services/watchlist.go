@@ -309,7 +309,7 @@ func (s *WatchlistService) RemoveChannelFromWatchlist(watchlistID, userID uint, 
 	// Remove videos from this channel from the watchlist
 	if err := tx.Exec(`
 		DELETE FROM watchlist_videos
-		WHERE watchlist_id = ? AND you_tube_video_id IN (
+		WHERE watchlist_id = ? AND video_id IN (
 			SELECT id FROM youtube_videos WHERE channel_id = ?
 		)
 	`, watchlistID, channel.ID).Error; err != nil {
@@ -358,7 +358,7 @@ func (s *WatchlistService) RemoveChannelFromWatchlist(watchlistID, userID uint, 
 			return nil // Original operation was successful
 		}
 		
-		if err := cleanupTx.Where("channel_id = ?", channel.ID).Delete(&models.YouTubeVideo{}).Error; err != nil {
+		if err := cleanupTx.Where("channel_id = ?", channel.ID).Delete(&models.Video{}).Error; err != nil {
 			cleanupTx.Rollback()
 			log.Printf("Warning: Failed to delete channel videos: %v", err)
 			return nil // Original operation was successful

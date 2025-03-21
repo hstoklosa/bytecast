@@ -7,7 +7,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// Watchlist represents a collection of YouTube channels created by a user
+/*
+ * Watchlist represents a collection of YouTube channels created by a user
+ */
 type Watchlist struct {
 	gorm.Model
 	UserID      uint   `gorm:"index;not null"` // Foreign key to User
@@ -15,7 +17,19 @@ type Watchlist struct {
 	Description string `gorm:"type:text"`
 	Color       string `gorm:"size:7;not null;check:color ~ '^#[a-fA-F0-9]{6}$'"`
 	Channels    []*Channel `gorm:"many2many:watchlist_channels;"`
-	Videos      []*YouTubeVideo `gorm:"many2many:watchlist_videos;"`
+	Videos      []*Video `gorm:"many2many:watchlist_videos;"`
+}
+
+func (Watchlist) TableName() string {
+	return "watchlists"
+}
+
+// BeforeSave Hook to validate the watchlist before saving
+func (w *Watchlist) BeforeSave(tx *gorm.DB) error {
+	if err := w.ValidateColor(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ValidateColor checks if the color is a valid hex code
@@ -33,17 +47,4 @@ func (w *Watchlist) ValidateColor() error {
 	}
 	
 	return nil
-}
-
-// BeforeSave Hook to validate the watchlist before saving
-func (w *Watchlist) BeforeSave(tx *gorm.DB) error {
-	if err := w.ValidateColor(); err != nil {
-		return err
-	}
-	return nil
-}
-
-// TableName specifies the table name for the Watchlist model
-func (Watchlist) TableName() string {
-	return "watchlists"
 }

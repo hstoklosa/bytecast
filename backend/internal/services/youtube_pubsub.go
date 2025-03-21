@@ -57,7 +57,7 @@ func NewPubSubService(db *gorm.DB, config *configs.Config, videoService *VideoSe
 
 // SubscribeToChannel subscribes to a YouTube channel's notifications
 func (s *PubSubService) SubscribeToChannel(channelID string) error {
-	var existingSub models.YouTubeSubscription
+	var existingSub models.HubSubscription
 	err := s.db.Where("channel_id = ?", channelID).First(&existingSub).Error
 	
 	// Errors other than "not found" 
@@ -73,7 +73,7 @@ func (s *PubSubService) SubscribeToChannel(channelID string) error {
 	}
 	
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		subscription := models.YouTubeSubscription{
+		subscription := models.HubSubscription{
 			ChannelID:     channelID,
 			LeaseSeconds:  leaseSeconds,
 			ExpiresAt:     expiresAt,
@@ -106,7 +106,7 @@ func (s *PubSubService) SubscribeToChannel(channelID string) error {
 
 // UnsubscribeFromChannel unsubscribes from a YouTube channel's notifications
 func (s *PubSubService) UnsubscribeFromChannel(channelID string) error {
-	var subscription models.YouTubeSubscription
+	var subscription models.HubSubscription
 	if err := s.db.Where("channel_id = ?", channelID).First(&subscription).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			log.Printf("No subscription record found for channel %s", channelID)
@@ -268,7 +268,7 @@ func (s *PubSubService) verifySignature(body []byte, signature string) (string, 
 	}
 
 	// Get subscription secret for the ChannelID
-	var subscription models.YouTubeSubscription
+	var subscription models.HubSubscription
 	if err := s.db.Where("channel_id = ?", channelID).First(&subscription).Error; err != nil {
 		return "", fmt.Errorf("subscription not found: %w", err)
 	}
@@ -352,7 +352,7 @@ func (s *PubSubService) processEntry(entry Entry) error {
 	}()
 
 	// Create a new YouTube video
-	video := &models.YouTubeVideo{
+	video := &models.Video{
 		YoutubeID:    videoID,
 		ChannelID:    channel.ID,
 		Title:        videoDetails.Title,
@@ -363,7 +363,7 @@ func (s *PubSubService) processEntry(entry Entry) error {
 	}
 
 	// Create or update video 
-	var existingVideo models.YouTubeVideo
+	var existingVideo models.Video
 	if err := tx.Where("youtube_id = ?", videoID).First(&existingVideo).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			tx.Rollback()
@@ -409,14 +409,14 @@ func (s *PubSubService) processEntry(entry Entry) error {
 		var count int64
 		if err := tx.Model(&models.Watchlist{}).
 			Joins("JOIN watchlist_videos ON watchlist_videos.watchlist_id = watchlists.id").
-			Where("watchlists.id = ? AND watchlist_videos.you_tube_video_id = ?", watchlist.ID, video.ID).
+			Where("watchlists.id = ? AND watchlist_videos.video_id = ?", watchlist.ID, video.ID).
 			Count(&count).Error; err != nil {
 			log.Printf("Warning: Error checking if video exists in watchlist: %v", err)
 			continue
 		}
 		
 		if count == 0 {
-			if err := tx.Exec("INSERT INTO watchlist_videos (watchlist_id, you_tube_video_id) VALUES (?, ?)", 
+			if err := tx.Exec("INSERT INTO watchlist_videos (watchlist_id, video_id) VALUES (?, ?)", 
 				watchlist.ID, video.ID).Error; err != nil {
 				log.Printf("Error adding video to watchlist %d: %v", watchlist.ID, err)
 				continue
