@@ -3,7 +3,6 @@ package handler
 import (
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -38,25 +37,6 @@ func NewAuthHandler(authService *services.AuthService, config *configs.Config) *
         config:        config,
         authMiddleware: middleware.AuthMiddleware([]byte(config.JWT.Secret)),
     }
-}
-
-func (h *AuthHandler) setRefreshCookie(c *gin.Context, token string, exp time.Time) {
-    secure := h.config.Server.Environment == "production"
-    sameSite := http.SameSiteLaxMode
-    if secure {
-        sameSite = http.SameSiteStrictMode
-    }
-
-    c.SetSameSite(sameSite)
-    c.SetCookie(
-        "refresh_token",
-        token,
-        int(time.Until(exp).Seconds()),
-        "/",
-        h.config.Server.Domain,
-        secure,
-        true, // HTTPOnly
-    )
 }
 
 func (h *AuthHandler) RegisterRoutes(r *gin.Engine) {
@@ -106,7 +86,8 @@ func (h *AuthHandler) register(c *gin.Context) {
 		return
 	}
 
-    h.setRefreshCookie(c, tokens.RefreshToken, exp)
+    secure := h.config.Server.Environment == "production"
+    utils.SetRefreshTokenCookie(c, tokens.RefreshToken, exp, secure, h.config.Server.Domain)
     
     c.JSON(http.StatusCreated, gin.H{
 		"access_token": tokens.AccessToken,
@@ -141,7 +122,8 @@ func (h *AuthHandler) login(c *gin.Context) {
         return
     }
 
-    h.setRefreshCookie(c, tokens.RefreshToken, exp)
+    secure := h.config.Server.Environment == "production"
+    utils.SetRefreshTokenCookie(c, tokens.RefreshToken, exp, secure, h.config.Server.Domain)
 
     c.JSON(http.StatusOK, gin.H{
 		"access_token": tokens.AccessToken,
@@ -172,7 +154,9 @@ func (h *AuthHandler) refresh(c *gin.Context) {
         return
     }
 
-    h.setRefreshCookie(c, tokens.RefreshToken, exp)
+    secure := h.config.Server.Environment == "production"
+    utils.SetRefreshTokenCookie(c, tokens.RefreshToken, exp, secure, h.config.Server.Domain)
+    
     c.JSON(http.StatusOK, gin.H{
         "access_token": tokens.AccessToken,
         "expires_at": exp.Unix(),
@@ -197,21 +181,7 @@ func (h *AuthHandler) logout(c *gin.Context) {
     }
 
     secure := h.config.Server.Environment == "production"
-    sameSite := http.SameSiteLaxMode
-    if secure {
-        sameSite = http.SameSiteStrictMode
-    }
-
-    c.SetSameSite(sameSite)
-    c.SetCookie(
-        "refresh_token",
-        "",
-        -1,
-        "/",
-        h.config.Server.Domain,
-        secure,
-        true,
-    )
+    utils.ClearRefreshTokenCookie(c, secure, h.config.Server.Domain)
 
     c.JSON(http.StatusOK, gin.H{
         "status": "success",
