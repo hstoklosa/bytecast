@@ -43,6 +43,8 @@ func New(cfg *configs.Config, db *database.Connection, logger *log.Logger) (*Ser
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.ErrorHandler())
+	router.Use(middleware.RequestID())
+	router.Use(middleware.Logger(logger))
 	
 	// Create the server instance
 	s := &Server{
