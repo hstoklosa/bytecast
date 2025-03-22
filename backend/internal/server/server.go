@@ -39,9 +39,9 @@ type Server struct {
 	authHandler      *handler.AuthHandler
 	watchlistHandler *handler.WatchlistHandler
 	pubsubHandler    *handler.YouTubePubSubHandler
+	healthHandler    *handler.HealthHandler
 }
 
-// New creates a new server instance
 func New(cfg *configs.Config, db *database.Connection) *Server {
 	router := gin.Default()
 
@@ -54,18 +54,12 @@ func New(cfg *configs.Config, db *database.Connection) *Server {
 
 // Start initializes and starts the server with graceful shutdown
 func (s *Server) Start() error {
-	// Step 1: Initialize all services
 	if err := s.initServices(); err != nil {
 		return fmt.Errorf("failed to initialize services: %w", err)
 	}
-	
-	// Step 2: Initialize all handlers
 	s.initHandlers()
-	
-	// Step 3: Set up all routes
 	s.setupRoutes()
 	
-	// Step 4: Configure HTTP server
 	s.server = &http.Server{
 		Addr:    "0.0.0.0:" + s.cfg.Server.Port,
 		Handler: s.router,
@@ -74,7 +68,6 @@ func (s *Server) Start() error {
 	// Channel to listen for errors coming from the listener
 	serverErrors := make(chan error, 1)
 
-	// Start the server
 	go func() {
 		log.Printf("Server is running on port %s", s.cfg.Server.Port)
 		serverErrors <- s.server.ListenAndServe()
