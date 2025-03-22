@@ -1,13 +1,17 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"bytecast/api/middleware"
+	"bytecast/api/utils"
 	"bytecast/configs"
+	apperrors "bytecast/internal/errors"
 	"bytecast/internal/services"
 )
 
@@ -71,114 +75,127 @@ func (h *AuthHandler) RegisterRoutes(r *gin.Engine) {
     }
 }
 
-func (h *AuthHandler) errorResponse(c *gin.Context, status int, message string) {
-    c.JSON(status, gin.H{
-        "message": message,
-        "status": status,
-    })
-}
-
 func (h *AuthHandler) register(c *gin.Context) {
     var req registerRequest
     if err := c.ShouldBindJSON(&req); err != nil {
-        h.errorResponse(c, http.StatusBadRequest, "Please check your input and try again")
+        utils.HandleValidationError(c, err, "Invalid input data")
         return
     }
 
     if err := h.authService.RegisterUser(req.Email, req.Username, req.Password); err != nil {
+        var appErr apperrors.AppError
+        
         switch err {
         case services.ErrUserExists:
-            h.errorResponse(c, http.StatusConflict, "This email is already registered")
-            return
+            appErr = apperrors.NewConflict("This email is already registered", err)
         case services.ErrUsernameTaken:
-            h.errorResponse(c, http.StatusConflict, "This username is already taken")
-            return
+            appErr = apperrors.NewConflict("This username is already taken", err)
         default:
-            h.errorResponse(c, http.StatusInternalServerError, "Failed to create account. Please try again")
-            return
+            appErr = utils.LogError("Failed to create an account", err)
         }
-    }
-
-    // After successful registration, perform login to generate tokens
-    tokens, exp, err := h.authService.LoginUser(req.Email, req.Password)
-    if err != nil {
-        h.errorResponse(c, http.StatusInternalServerError, "Failed to complete registration. Please try again")
+        
+        utils.HandleError(c, appErr)
         return
     }
+
+	// After successful registration, perform login to generate tokens
+	tokens, exp, err := h.authService.LoginUser(req.Email, req.Password)
+	if err != nil {
+		appErr := apperrors.NewInternal("Failed to create account. Please try again", err)
+		utils.HandleError(c, appErr)
+		return
+	}
 
     h.setRefreshCookie(c, tokens.RefreshToken, exp)
     
     c.JSON(http.StatusCreated, gin.H{
-        "access_token": tokens.AccessToken,
+		"access_token": tokens.AccessToken,
+		"expires_at": exp.Unix(),
     })
 }
 
 func (h *AuthHandler) login(c *gin.Context) {
     var req loginRequest
     if err := c.ShouldBindJSON(&req); err != nil {
-        h.errorResponse(c, http.StatusBadRequest, "Please check your input and try again")
+        utils.HandleValidationError(c, err, "Invalid input data")
         return
     }
 
     tokens, exp, err := h.authService.LoginUser(req.Identifier, req.Password)
     if err != nil {
+        var appErr apperrors.AppError
+        
         if err == services.ErrInvalidCredentials {
-            h.errorResponse(c, http.StatusUnauthorized, "Incorrect email or password")
-            return
+            appErr = apperrors.NewUnauthorized("Invalid username/email or password", err)
+        } else {
+            appErr = utils.LogError("Authentication failed", err)
         }
-        h.errorResponse(c, http.StatusInternalServerError, "Failed to log in. Please try again")
+        
+        utils.HandleError(c, appErr)
+        return
+    }
+
+    user, err := h.authService.FindByIdentifier(req.Identifier)
+    if err != nil {
+        utils.HandleError(c, utils.LogError("Failed to retrieve user data", err))
         return
     }
 
     h.setRefreshCookie(c, tokens.RefreshToken, exp)
 
     c.JSON(http.StatusOK, gin.H{
-        "access_token": tokens.AccessToken,
+		"access_token": tokens.AccessToken,
+		"expires_at": exp.Unix(),
+		"user": gin.H{
+			"id": user.ID,
+			"username": user.Username,
+			"email": user.Email,
+		},
     })
 }
 
 func (h *AuthHandler) refresh(c *gin.Context) {
     refreshToken, err := c.Cookie("refresh_token")
     if err != nil {
-        h.errorResponse(c, http.StatusUnauthorized, "Session expired. Please log in again")
+        utils.HandleError(c, apperrors.NewUnauthorized("Session expired. Please log in again", err))
         return
     }
 
     tokens, exp, err := h.authService.RefreshTokens(refreshToken)
     if err != nil {
         if err == services.ErrTokenInvalid {
-            h.errorResponse(c, http.StatusUnauthorized, "Invalid session. Please log in again")
+            utils.HandleError(c, apperrors.NewUnauthorized("Invalid session. Please log in again", err))
             return
         }
-        h.errorResponse(c, http.StatusInternalServerError, "Failed to refresh session. Please try again")
+
+        utils.HandleError(c, utils.LogError("Failed to refresh session", err))
         return
     }
 
     h.setRefreshCookie(c, tokens.RefreshToken, exp)
-
     c.JSON(http.StatusOK, gin.H{
         "access_token": tokens.AccessToken,
+        "expires_at": exp.Unix(),
     })
 }
 
 func (h *AuthHandler) logout(c *gin.Context) {
     refreshToken, err := c.Cookie("refresh_token")
     if err != nil {
-        h.errorResponse(c, http.StatusUnauthorized, "No active session found")
+        utils.HandleError(c, apperrors.NewUnauthorized("No active session found", err))
         return
     }
 
     if err := h.authService.RevokeToken(refreshToken); err != nil {
         switch err {
         case services.ErrTokenInvalid:
-            h.errorResponse(c, http.StatusUnauthorized, "Invalid session")
+            utils.HandleError(c, apperrors.NewUnauthorized("Invalid session", err))
         default:
-            h.errorResponse(c, http.StatusInternalServerError, "Failed to log out. Please try again")
+            utils.HandleError(c, utils.LogError("Failed to log out", err))
         }
         return
     }
 
-    // Clear the refresh token cookie
     secure := h.config.Server.Environment == "production"
     sameSite := http.SameSiteLaxMode
     if secure {
@@ -196,10 +213,40 @@ func (h *AuthHandler) logout(c *gin.Context) {
         true,
     )
 
-    c.Status(http.StatusNoContent)
+    c.JSON(http.StatusOK, gin.H{
+        "status": "success",
+        "message": "Logged out successfully",
+    })
 }
 
 func (h *AuthHandler) me(c *gin.Context) {
-    userID, _ := c.Get("user_id")
-    c.JSON(http.StatusOK, gin.H{"user_id": userID})
+    userID, exists := c.Get("userID")
+    if !exists {
+        utils.HandleError(c, apperrors.NewUnauthorized("Not authenticated", nil))
+        return
+    }
+
+    id, ok := userID.(uint)
+    if !ok {
+        utils.HandleError(c, utils.LogError("Invalid user ID format", nil))
+        return
+    }
+    
+    user, err := h.authService.GetUserByID(id)
+    if err != nil {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
+            utils.HandleError(c, apperrors.NewNotFound("User not found", err))
+        } else {
+            utils.HandleError(c, utils.LogError("Failed to retrieve user data", err))
+        }
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "user": gin.H{
+            "id": user.ID,
+            "username": user.Username,
+            "email": user.Email,
+        },
+    })
 }

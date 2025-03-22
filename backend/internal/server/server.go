@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"bytecast/api/handler"
+	"bytecast/api/middleware"
 	"bytecast/configs"
 	"bytecast/internal/database"
 	"bytecast/internal/services"
@@ -43,7 +44,19 @@ type Server struct {
 }
 
 func New(cfg *configs.Config, db *database.Connection) *Server {
-	router := gin.Default()
+	// Set mode based on environment
+	if cfg.Server.Environment == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	router := gin.New()
+	
+	// Use custom logger and recovery middleware
+	router.Use(gin.Logger())
+	router.Use(gin.Recovery())
+	
+	// Use our custom error handling middleware
+	router.Use(middleware.ErrorHandler())
 
 	return &Server{
 		router: router,

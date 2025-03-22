@@ -1,12 +1,15 @@
 package handler
 
 import (
-	"bytecast/configs"
-	"bytecast/internal/database"
-	"bytecast/internal/services"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"bytecast/api/utils"
+	"bytecast/configs"
+	"bytecast/internal/database"
+	apperrors "bytecast/internal/errors"
+	"bytecast/internal/services"
 )
 
 type HealthHandler struct {
@@ -33,14 +36,14 @@ func (h *HealthHandler) RegisterRoutes(r *gin.Engine) {
 
 func (h *HealthHandler) HandleServerCheck(c *gin.Context) {
 	if err := h.db.Ping(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status": "Database error",
-			"error": err.Error(),
-		})
+		utils.HandleError(c, apperrors.NewServiceUnavailable("Database connection failed", err))
 		return
 	}
 	
-	c.JSON(http.StatusOK, gin.H{"status": "OK"})
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"message": "Service is healthy",
+	})
 }
 
 func (h *HealthHandler) HandleWebSubCheck(c *gin.Context) {
@@ -53,8 +56,9 @@ func (h *HealthHandler) HandleWebSubCheck(c *gin.Context) {
 	}
 	
 	c.JSON(http.StatusOK, gin.H{
-		"status": "OK",
-		"youtube_websub": gin.H{
+		"status": "success",
+		"message": "WebSub check completed",
+		"data": gin.H{
 			"callback_url": callbackURL,
 			"api_key_configured": apiKeyConfigured,
 			"pubsub_service_initialized": h.pubsubService != nil,

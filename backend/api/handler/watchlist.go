@@ -10,6 +10,8 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 
+	"bytecast/api/utils"
+	apperrors "bytecast/internal/errors"
 	"bytecast/internal/models"
 	"bytecast/internal/services"
 )
@@ -59,19 +61,16 @@ type channelResponse struct {
 	CustomName  string `json:"custom_name,omitempty"`
 }
 
-// WatchlistHandler handles HTTP requests related to watchlists
 type WatchlistHandler struct {
 	watchlistService *services.WatchlistService
 }
 
-// NewWatchlistHandler creates a new watchlist handler
 func NewWatchlistHandler(watchlistService *services.WatchlistService) *WatchlistHandler {
 	return &WatchlistHandler{
 		watchlistService: watchlistService,
 	}
 }
 
-// RegisterRoutes registers the watchlist routes
 func (h *WatchlistHandler) RegisterRoutes(r *gin.Engine, authMiddleware gin.HandlerFunc) {
 	watchlists := r.Group("/api/v1/watchlists")
 	watchlists.Use(authMiddleware) // Require authentication for all watchlist routes
@@ -82,32 +81,21 @@ func (h *WatchlistHandler) RegisterRoutes(r *gin.Engine, authMiddleware gin.Hand
 	watchlists.PUT("/:id", h.updateWatchlist)
 	watchlists.DELETE("/:id", h.deleteWatchlist)
 
-	// Channel management within watchlists
 	watchlists.POST("/:id/channels", h.addChannel)
 	watchlists.GET("/:id/channels", h.getChannels)
 	watchlists.DELETE("/:id/channels/:channel_id", h.removeChannel)
 }
 
-// errorResponse returns a standardized error response
-func (h *WatchlistHandler) errorResponse(c *gin.Context, status int, message string) {
-	c.JSON(status, gin.H{
-		"message": message,
-		"status":  status,
-	})
-}
-
-// getUserID extracts the user ID from the context
 func (h *WatchlistHandler) getUserID(c *gin.Context) (uint, bool) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		h.errorResponse(c, http.StatusUnauthorized, "User not authenticated")
+		utils.HandleError(c, apperrors.NewUnauthorized("User not authenticated", nil))
 		return 0, false
 	}
 
 	return userID.(uint), true
 }
 
-// createWatchlist handles the creation of a new watchlist
 func (h *WatchlistHandler) createWatchlist(c *gin.Context) {
 	userID, ok := h.getUserID(c)
 	if !ok {
@@ -116,20 +104,19 @@ func (h *WatchlistHandler) createWatchlist(c *gin.Context) {
 
 	var req createWatchlistRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.errorResponse(c, http.StatusBadRequest, "Invalid request format")
+		utils.HandleValidationError(c, err, "Invalid request format")
 		return
 	}
 
 	watchlist, err := h.watchlistService.CreateWatchlist(userID, req.Name, req.Description, req.Color)
 	if err != nil {
-		h.errorResponse(c, http.StatusInternalServerError, "Failed to create watchlist")
+		utils.HandleError(c, apperrors.NewInternal("Failed to create watchlist", err))
 		return
 	}
 
 	c.JSON(http.StatusCreated, watchlistToResponse(watchlist))
 }
 
-// getUserWatchlists returns all watchlists for the authenticated user
 func (h *WatchlistHandler) getUserWatchlists(c *gin.Context) {
 	userID, ok := h.getUserID(c)
 	if !ok {
@@ -138,7 +125,7 @@ func (h *WatchlistHandler) getUserWatchlists(c *gin.Context) {
 
 	watchlists, err := h.watchlistService.GetUserWatchlists(userID)
 	if err != nil {
-		h.errorResponse(c, http.StatusInternalServerError, "Failed to retrieve watchlists")
+		utils.HandleError(c, apperrors.NewInternal("Failed to retrieve watchlists", err))
 		return
 	}
 
@@ -152,7 +139,6 @@ func (h *WatchlistHandler) getUserWatchlists(c *gin.Context) {
 	})
 }
 
-// getWatchlist returns a specific watchlist by ID
 func (h *WatchlistHandler) getWatchlist(c *gin.Context) {
 	userID, ok := h.getUserID(c)
 	if !ok {
@@ -161,16 +147,17 @@ func (h *WatchlistHandler) getWatchlist(c *gin.Context) {
 
 	watchlistID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		h.errorResponse(c, http.StatusBadRequest, "Invalid watchlist ID")
+		utils.HandleError(c, apperrors.NewBadRequest("Invalid watchlist ID", err))
 		return
 	}
 
 	watchlist, err := h.watchlistService.GetWatchlist(uint(watchlistID), userID)
 	if err != nil {
-		if err == services.ErrWatchlistNotFound {
-			h.errorResponse(c, http.StatusNotFound, "Watchlist not found")
-		} else {
-			h.errorResponse(c, http.StatusInternalServerError, "Failed to retrieve watchlist")
+		switch err {
+		case services.ErrWatchlistNotFound:
+			utils.HandleError(c, apperrors.NewNotFound("Watchlist not found", err))
+		default:
+			utils.HandleError(c, apperrors.NewInternal("Failed to retrieve watchlist", err))
 		}
 		return
 	}
@@ -178,7 +165,6 @@ func (h *WatchlistHandler) getWatchlist(c *gin.Context) {
 	c.JSON(http.StatusOK, watchlistToResponse(watchlist))
 }
 
-// updateWatchlist updates a watchlist's name and description
 func (h *WatchlistHandler) updateWatchlist(c *gin.Context) {
 	userID, ok := h.getUserID(c)
 	if !ok {
@@ -187,22 +173,23 @@ func (h *WatchlistHandler) updateWatchlist(c *gin.Context) {
 
 	watchlistID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		h.errorResponse(c, http.StatusBadRequest, "Invalid watchlist ID")
+		utils.HandleError(c, apperrors.NewBadRequest("Invalid watchlist ID", err))
 		return
 	}
 
 	var req updateWatchlistRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.errorResponse(c, http.StatusBadRequest, "Invalid request format")
+		utils.HandleValidationError(c, err, "Invalid request format")
 		return
 	}
 
 	watchlist, err := h.watchlistService.UpdateWatchlist(uint(watchlistID), userID, req.Name, req.Description, req.Color)
 	if err != nil {
-		if err == services.ErrWatchlistNotFound {
-			h.errorResponse(c, http.StatusNotFound, "Watchlist not found")
-		} else {
-			h.errorResponse(c, http.StatusInternalServerError, "Failed to update watchlist")
+		switch err {
+		case services.ErrWatchlistNotFound:
+			utils.HandleError(c, apperrors.NewNotFound("Watchlist not found", err))
+		default:
+			utils.HandleError(c, apperrors.NewInternal("Failed to update watchlist", err))
 		}
 		return
 	}
@@ -210,7 +197,6 @@ func (h *WatchlistHandler) updateWatchlist(c *gin.Context) {
 	c.JSON(http.StatusOK, watchlistToResponse(watchlist))
 }
 
-// deleteWatchlist deletes a watchlist
 func (h *WatchlistHandler) deleteWatchlist(c *gin.Context) {
 	userID, ok := h.getUserID(c)
 	if !ok {
@@ -219,16 +205,17 @@ func (h *WatchlistHandler) deleteWatchlist(c *gin.Context) {
 
 	watchlistID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		h.errorResponse(c, http.StatusBadRequest, "Invalid watchlist ID")
+		utils.HandleError(c, apperrors.NewBadRequest("Invalid watchlist ID", err))
 		return
 	}
 
 	err = h.watchlistService.DeleteWatchlist(uint(watchlistID), userID)
 	if err != nil {
-		if err == services.ErrWatchlistNotFound {
-			h.errorResponse(c, http.StatusNotFound, "Watchlist not found")
-		} else {
-			h.errorResponse(c, http.StatusInternalServerError, "Failed to delete watchlist")
+		switch err {
+		case services.ErrWatchlistNotFound:
+			utils.HandleError(c, apperrors.NewNotFound("Watchlist not found", err))
+		default:
+			utils.HandleError(c, apperrors.NewInternal("Failed to delete watchlist", err))
 		}
 		return
 	}
@@ -236,7 +223,6 @@ func (h *WatchlistHandler) deleteWatchlist(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// addChannel adds a channel to a watchlist
 func (h *WatchlistHandler) addChannel(c *gin.Context) {
 	userID, ok := h.getUserID(c)
 	if !ok {
@@ -245,13 +231,13 @@ func (h *WatchlistHandler) addChannel(c *gin.Context) {
 
 	watchlistID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		h.errorResponse(c, http.StatusBadRequest, "Invalid watchlist ID")
+		utils.HandleError(c, apperrors.NewBadRequest("Invalid watchlist ID", err))
 		return
 	}
 
 	var req addChannelRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.errorResponse(c, http.StatusBadRequest, "Invalid request format")
+		utils.HandleValidationError(c, err, "Invalid request format")
 		return
 	}
 
@@ -259,15 +245,15 @@ func (h *WatchlistHandler) addChannel(c *gin.Context) {
 	if err != nil {
 		switch err {
 		case services.ErrWatchlistNotFound:
-			h.errorResponse(c, http.StatusNotFound, "Watchlist not found")
+			utils.HandleError(c, apperrors.NewNotFound("Watchlist not found", err))
 		case services.ErrInvalidYouTubeID:
-			h.errorResponse(c, http.StatusBadRequest, "Invalid YouTube channel ID or URL")
+			utils.HandleError(c, apperrors.NewBadRequest("Invalid YouTube channel ID or URL", err))
 		case services.ErrYouTubeAPIError:
-			h.errorResponse(c, http.StatusServiceUnavailable, "YouTube API service is currently unavailable")
+			utils.HandleError(c, apperrors.NewServiceUnavailable("YouTube API service is currently unavailable", err))
 		case services.ErrMissingAPIKey:
-			h.errorResponse(c, http.StatusServiceUnavailable, "YouTube API key is not configured. Please add a YouTube API key to your environment variables.")
+			utils.HandleError(c, apperrors.NewServiceUnavailable("YouTube API key is not configured. Please add a YouTube API key to your environment variables.", err))
 		default:
-			h.errorResponse(c, http.StatusInternalServerError, fmt.Sprintf("Failed to add channel to watchlist: %v", err))
+			utils.HandleError(c, apperrors.NewInternal(fmt.Sprintf("Failed to add channel to watchlist: %v", err), err))
 		}
 		return
 	}
@@ -275,7 +261,6 @@ func (h *WatchlistHandler) addChannel(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-// getChannels returns all channels in a watchlist
 func (h *WatchlistHandler) getChannels(c *gin.Context) {
 	userID, ok := h.getUserID(c)
 	if !ok {
@@ -284,16 +269,17 @@ func (h *WatchlistHandler) getChannels(c *gin.Context) {
 
 	watchlistID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		h.errorResponse(c, http.StatusBadRequest, "Invalid watchlist ID")
+		utils.HandleError(c, apperrors.NewBadRequest("Invalid watchlist ID", err))
 		return
 	}
 
 	channels, err := h.watchlistService.GetChannelsInWatchlist(uint(watchlistID), userID)
 	if err != nil {
-		if err == services.ErrWatchlistNotFound {
-			h.errorResponse(c, http.StatusNotFound, "Watchlist not found")
-		} else {
-			h.errorResponse(c, http.StatusInternalServerError, "Failed to retrieve channels")
+		switch err {
+		case services.ErrWatchlistNotFound:
+			utils.HandleError(c, apperrors.NewNotFound("Watchlist not found", err))
+		default:
+			utils.HandleError(c, apperrors.NewInternal("Failed to retrieve channels", err))
 		}
 		return
 	}
@@ -308,7 +294,6 @@ func (h *WatchlistHandler) getChannels(c *gin.Context) {
 	})
 }
 
-// removeChannel removes a channel from a watchlist
 func (h *WatchlistHandler) removeChannel(c *gin.Context) {
 	userID, ok := h.getUserID(c)
 	if !ok {
@@ -317,13 +302,13 @@ func (h *WatchlistHandler) removeChannel(c *gin.Context) {
 
 	watchlistID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		h.errorResponse(c, http.StatusBadRequest, "Invalid watchlist ID")
+		utils.HandleError(c, apperrors.NewBadRequest("Invalid watchlist ID", err))
 		return
 	}
 
 	channelID := c.Param("channel_id")
 	if channelID == "" {
-		h.errorResponse(c, http.StatusBadRequest, "Channel ID is required")
+		utils.HandleError(c, apperrors.NewBadRequest("Channel ID is required", nil))
 		return
 	}
 
@@ -331,11 +316,11 @@ func (h *WatchlistHandler) removeChannel(c *gin.Context) {
 	if err != nil {
 		switch err {
 		case services.ErrWatchlistNotFound:
-			h.errorResponse(c, http.StatusNotFound, "Watchlist not found")
+			utils.HandleError(c, apperrors.NewNotFound("Watchlist not found", err))
 		case services.ErrChannelNotFound:
-			h.errorResponse(c, http.StatusNotFound, "Channel not found in watchlist")
+			utils.HandleError(c, apperrors.NewNotFound("Channel not found in watchlist", err))
 		default:
-			h.errorResponse(c, http.StatusInternalServerError, "Failed to remove channel from watchlist")
+			utils.HandleError(c, apperrors.NewInternal("Failed to remove channel from watchlist", err))
 		}
 		return
 	}
@@ -343,7 +328,6 @@ func (h *WatchlistHandler) removeChannel(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// Helper functions to convert models to response structs
 func watchlistToResponse(watchlist *models.Watchlist) watchlistResponse {
 	return watchlistResponse{
 		ID:          watchlist.ID,
