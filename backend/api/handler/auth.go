@@ -33,25 +33,20 @@ type AuthHandler struct {
 
 func NewAuthHandler(authService *services.AuthService, config *configs.Config) *AuthHandler {
     return &AuthHandler{
-        authService:   authService,
-        config:        config,
+        authService:    authService,
+        config:         config,
         authMiddleware: middleware.AuthMiddleware([]byte(config.JWT.Secret)),
     }
 }
 
 func (h *AuthHandler) RegisterRoutes(r *gin.Engine) {
     auth := r.Group("/api/v1/auth")
-    {
+	{
         auth.POST("/register", h.register)
         auth.POST("/login", h.login)
         auth.POST("/refresh", h.refresh)
         auth.POST("/logout", h.logout)
-    }
-
-    protected := r.Group("/api/v1/auth")
-    protected.Use(h.authMiddleware)
-    {
-        protected.GET("/me", h.me)
+        auth.GET("/me", h.authMiddleware, h.me)
     }
 }
 
