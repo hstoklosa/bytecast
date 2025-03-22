@@ -45,6 +45,7 @@ func New(cfg *configs.Config, db *database.Connection, logger *log.Logger) (*Ser
 	router.Use(middleware.ErrorHandler())
 	router.Use(middleware.RequestID())
 	router.Use(middleware.Logger(logger))
+	router.Use(middleware.CORS())
 	
 	// Create the server instance
 	s := &Server{
