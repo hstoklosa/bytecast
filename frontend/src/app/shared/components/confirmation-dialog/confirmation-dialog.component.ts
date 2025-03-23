@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from "@angular/core";
+import { Component, EventEmitter, Input, Output, ViewChild } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import {
   BrnAlertDialogContentDirective,
@@ -106,6 +106,22 @@ export class ConfirmationDialogComponent {
    * Event emitted when the cancel button is clicked
    */
   @Output() cancelled = new EventEmitter<void>();
+
+  /**
+   * ViewChild reference to the dialog trigger button
+   */
+  @ViewChild(BrnAlertDialogTriggerDirective)
+  dialogTrigger!: BrnAlertDialogTriggerDirective;
+
+  /**
+   * Opens the dialog programmatically
+   */
+  openDialog(): void {
+    if (this.dialogTrigger) {
+      // Use a small timeout to ensure the view is initialized
+      setTimeout(() => this.dialogTrigger.open());
+    }
+  }
 
   /**
    * Handle the confirm action

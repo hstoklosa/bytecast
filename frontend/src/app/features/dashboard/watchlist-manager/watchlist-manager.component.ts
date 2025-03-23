@@ -206,6 +206,15 @@ export class WatchlistManagerComponent {
   @ViewChildren("editWatchlistDialog")
   editWatchlistDialogs!: QueryList<EditWatchlistDialogComponent>;
 
+  @ViewChild("deleteWatchlistDialog")
+  deleteWatchlistDialog?: ConfirmationDialogComponent;
+
+  @ViewChild("removeChannelDialog")
+  removeChannelDialog?: ConfirmationDialogComponent;
+
+  // Track the channel that is being removed
+  readonly channelToRemove = signal<number | null>(null);
+
   constructor() {
     // Restore active watchlist from localStorage
     const storedWatchlistId = localStorage.getItem("activeWatchlist");
@@ -588,6 +597,51 @@ export class WatchlistManagerComponent {
 
     if (dialog) {
       dialog.openDialog();
+    }
+  }
+
+  // Show delete watchlist confirmation dialog
+  showDeleteWatchlistConfirmation(): void {
+    // Use the openDialog method on the dialog component
+    setTimeout(() => {
+      if (this.deleteWatchlistDialog) {
+        this.deleteWatchlistDialog.openDialog();
+      }
+    });
+  }
+
+  // Show remove channel confirmation dialog
+  showRemoveChannelConfirmation(channelId: number): void {
+    // Store the channel ID to remove
+    this.channelToRemove.set(channelId);
+
+    // Open the confirmation dialog
+    setTimeout(() => {
+      if (this.removeChannelDialog) {
+        this.removeChannelDialog.openDialog();
+      }
+    });
+  }
+
+  // Get the confirmation message for removing a channel
+  getRemoveChannelConfirmationMessage(): string {
+    const channelId = this.channelToRemove();
+    if (!channelId)
+      return "Are you sure you want to remove this channel from the watchlist?";
+
+    const channel = this.channels()?.find((c) => c.id === channelId);
+    if (!channel)
+      return "Are you sure you want to remove this channel from the watchlist?";
+
+    return `Are you sure you want to remove "${channel.title}" from this watchlist?`;
+  }
+
+  // Handle confirmed channel removal
+  onRemoveChannelConfirmed(): void {
+    const channelId = this.channelToRemove();
+    if (channelId !== null) {
+      this.removeChannel(channelId);
+      this.channelToRemove.set(null);
     }
   }
 }

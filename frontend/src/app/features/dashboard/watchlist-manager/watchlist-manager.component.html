@@ -163,7 +163,7 @@
                           class="flex items-center gap-2 text-destructive focus:text-destructive"
                           (click)="
                             onWatchlistSelect(watchlist.id);
-                            onDeleteConfirmed();
+                            showDeleteWatchlistConfirmation();
                             $event.stopPropagation()
                           "
                         >
@@ -376,7 +376,7 @@
                         hlmBtn
                         variant="ghost"
                         size="icon"
-                        (click)="removeChannel(channel.id)"
+                        (click)="showRemoveChannelConfirmation(channel.id)"
                         class="text-muted-foreground hover:text-destructive"
                       >
                         <lucide-angular
@@ -439,3 +439,33 @@
   style="display: none"
 ></app-edit-watchlist-dialog>
 }
+
+<!-- Delete watchlist confirmation dialog -->
+<app-confirmation-dialog
+  triggerText=""
+  triggerClass="hidden"
+  [disabled]="false"
+  title="Delete Watchlist"
+  [description]="getDeleteConfirmationMessage()"
+  confirmText="Delete"
+  confirmVariant="destructive"
+  cancelText="Cancel"
+  (confirmed)="onDeleteConfirmed()"
+  #deleteWatchlistDialog
+  style="display: none"
+></app-confirmation-dialog>
+
+<!-- Remove channel confirmation dialog -->
+<app-confirmation-dialog
+  triggerText=""
+  triggerClass="hidden"
+  [disabled]="false"
+  title="Remove Channel"
+  [description]="getRemoveChannelConfirmationMessage()"
+  confirmText="Remove"
+  confirmVariant="destructive"
+  cancelText="Cancel"
+  (confirmed)="onRemoveChannelConfirmed()"
+  #removeChannelDialog
+  style="display: none"
+></app-confirmation-dialog>
