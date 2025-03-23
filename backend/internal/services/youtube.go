@@ -21,13 +21,11 @@ var (
 	ErrMissingAPIKey       = errors.New("YouTube API key is not configured")
 )
 
-// YouTubeService handles interactions with the YouTube API
 type YouTubeService struct {
 	apiKey     string
 	httpClient *http.Client
 }
 
-// ChannelInfo contains the essential information about a YouTube channel
 type ChannelInfo struct {
 	ID          string
 	Title       string
@@ -35,7 +33,6 @@ type ChannelInfo struct {
 	Thumbnail   string
 }
 
-// VideoDetails contains the essential information about a YouTube video
 type VideoDetails struct {
 	ID          string
 	Title       string
@@ -44,7 +41,6 @@ type VideoDetails struct {
 	Duration    string
 }
 
-// NewYouTubeService creates a new YouTube service
 func NewYouTubeService(config *configs.Config) (*YouTubeService, error) {
 	if config == nil {
 		return nil, errors.New("config is required")
@@ -60,11 +56,10 @@ func NewYouTubeService(config *configs.Config) (*YouTubeService, error) {
 	}, nil
 }
 
-// GetChannelInfo retrieves channel information from YouTube API
 func (s *YouTubeService) GetChannelInfo(channelID string) (*ChannelInfo, error) {
 	ctx := context.Background()
 	
-	// Create the YouTube service with the API key
+	// youtube service with the API key
 	youtubeService, err := youtube.NewService(ctx, option.WithAPIKey(s.apiKey))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrYouTubeAPIError, err)
@@ -76,8 +71,7 @@ func (s *YouTubeService) GetChannelInfo(channelID string) (*ChannelInfo, error) 
 		return nil, err
 	}
 
-	// First try direct channel ID lookup for standard YouTube channel IDs
-	// This is more efficient than search and uses less quota
+	// try to lookup direct channel ID standard YouTube channel IDs
 	if regexp.MustCompile(`^UC[a-zA-Z0-9_-]{22}$`).MatchString(extractedID) {
 		call := youtubeService.Channels.List([]string{"snippet"}).Id(extractedID)
 		response, err := call.Do()
@@ -90,7 +84,7 @@ func (s *YouTubeService) GetChannelInfo(channelID string) (*ChannelInfo, error) 
 		}
 	}
 	
-	// For custom URLs with @ symbol, try to get by handle first
+	// For custom URLs with @ symbol, try to get by handle first 
 	// This is more efficient than search for custom URLs
 	if strings.HasPrefix(extractedID, "@") {
 		handle := strings.TrimPrefix(extractedID, "@")
@@ -157,15 +151,13 @@ func extractChannelInfo(channel *youtube.Channel) *ChannelInfo {
 	}
 }
 
-// ExtractChannelID extracts a YouTube channel ID from various URL formats
 func (s *YouTubeService) ExtractChannelID(input string) (string, error) {
-	// Trim whitespace and handle empty input
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return "", ErrInvalidYouTubeURL
 	}
 
-	// If it's already just an ID (starts with UC), return it
+	// It appears on just an ID (starts with UC), return it
 	if regexp.MustCompile(`^UC[a-zA-Z0-9_-]{22}$`).MatchString(input) {
 		return input, nil
 	}
@@ -220,13 +212,11 @@ func (s *YouTubeService) ExtractChannelID(input string) (string, error) {
 func (s *YouTubeService) GetVideoDetails(videoID string) (*VideoDetails, error) {
 	ctx := context.Background()
 	
-	// Create the YouTube service with the API key
 	youtubeService, err := youtube.NewService(ctx, option.WithAPIKey(s.apiKey))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrYouTubeAPIError, err)
 	}
 
-	// Get video details
 	call := youtubeService.Videos.List([]string{"snippet", "contentDetails"}).Id(videoID)
 	response, err := call.Do()
 	if err != nil {
@@ -239,7 +229,6 @@ func (s *YouTubeService) GetVideoDetails(videoID string) (*VideoDetails, error) 
 
 	video := response.Items[0]
 	
-	// Get the highest quality thumbnail available
 	thumbnailURL := ""
 	if video.Snippet.Thumbnails != nil {
 		if video.Snippet.Thumbnails.Maxres != nil {

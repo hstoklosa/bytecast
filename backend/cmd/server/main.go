@@ -10,11 +10,11 @@ import (
 
 	"bytecast/configs"
 	"bytecast/internal/database"
+	"bytecast/internal/errors"
 	"bytecast/internal/server"
 )
 
 func main() {
-	// Configure structured logger
 	logger := configureLogger()
 	logger.Println("Starting ByteCast API server...")
 	
@@ -26,20 +26,27 @@ func main() {
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 	
-	// Step 1: Load configuration
 	cfg, err := configs.Load()
 	if err != nil {
-		logger.Fatal("Failed to load configuration:", err)
+		if appErr, ok := err.(errors.AppError); ok {
+			logger.Fatal("Configuration error: ", appErr.Message)
+		} else {
+			logger.Fatal("Configuration error: ", err)
+		}
 	}
 	
-	// Step 2: Initialize and configure database
+	logger.Println("Configuration loaded successfully")
+	configStatus := cfg.GetConfigStatus()
+	logger.Printf("Feature status - YouTube API: %v, PubSub: %v", 
+		configStatus.YouTubeAPIEnabled, 
+		configStatus.PubSubEnabled)
+	
 	dbConn, err := setupDatabase(cfg, logger)
 	if err != nil {
 		logger.Fatal("Database setup failed:", err)
 	}
 	defer closeDatabase(dbConn, logger)
 	
-	// Step 3: Initialize and start server
 	srv, err := server.New(cfg, dbConn, logger)
 	if err != nil {
 		logger.Fatal("Failed to create server:", err)
@@ -54,15 +61,12 @@ func main() {
 	
 	logger.Printf("ByteCast API server running on port %s", cfg.Server.Port)
 	
-	// Wait for shutdown signal
 	<-shutdown
 	logger.Println("Shutdown signal received, gracefully shutting down...")
 	
-	// Create a timeout context for graceful shutdown
 	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 15*time.Second)
 	defer shutdownCancel()
 	
-	// Attempt graceful shutdown
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Printf("Server shutdown error: %v", err)
 	}
@@ -82,7 +86,6 @@ func setupDatabase(cfg *configs.Config, logger *log.Logger) (*database.Connectio
 		return nil, err
 	}
 	
-	// Run migrations
 	logger.Println("Running database migrations...")
 	if err := dbConn.RunMigrations(); err != nil {
 		return nil, err

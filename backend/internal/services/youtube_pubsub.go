@@ -39,11 +39,11 @@ type PubSubService struct {
 	youtubeService *YouTubeService
 }
 
-// NewPubSubService creates a new PubSub service instance
 func NewPubSubService(db *gorm.DB, config *configs.Config, videoService *VideoService) *PubSubService {
 	youtubeService, err := NewYouTubeService(config)
 	if err != nil {
-		log.Printf("Failed to create YouTube service: %v", err)
+		log.Printf("Failed to create YouTube service for PubSub: %v", err)
+		return nil
 	}
 
 	return &PubSubService{
@@ -55,12 +55,10 @@ func NewPubSubService(db *gorm.DB, config *configs.Config, videoService *VideoSe
 	}
 }
 
-// SubscribeToChannel subscribes to a YouTube channel's notifications
 func (s *PubSubService) SubscribeToChannel(channelID string) error {
 	var existingSub models.HubSubscription
 	err := s.db.Where("channel_id = ?", channelID).First(&existingSub).Error
 	
-	// Errors other than "not found" 
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("database error checking for existing subscription: %w", err)
 	}
@@ -96,7 +94,6 @@ func (s *PubSubService) SubscribeToChannel(channelID string) error {
 		}
 	}
 
-	// Send subscription request to hub (keep the record if hub fails)
 	if err := s.sendSubscriptionRequest(channelID, existingSub.Secret, "subscribe"); err != nil {
 		log.Printf("Failed to subscribe to hub for channel %s: %v", channelID, err)
 	}
@@ -104,7 +101,6 @@ func (s *PubSubService) SubscribeToChannel(channelID string) error {
 	return nil
 }
 
-// UnsubscribeFromChannel unsubscribes from a YouTube channel's notifications
 func (s *PubSubService) UnsubscribeFromChannel(channelID string) error {
 	var subscription models.HubSubscription
 	if err := s.db.Where("channel_id = ?", channelID).First(&subscription).Error; err != nil {
@@ -146,8 +142,6 @@ func (s *PubSubService) sendSubscriptionRequest(channelID, secret, mode string) 
 	form.Set("hub.secret", secret)
 	form.Set("hub.verify", "async")
 	
-	// Only set lease seconds if greater than 0
-	// YouTube WebSub hub will use default (typically a few days) if not specified
 	if s.config.YouTube.LeaseSeconds > 0 {
 		form.Set("hub.lease_seconds", fmt.Sprintf("%d", s.config.YouTube.LeaseSeconds))
 	}
@@ -181,13 +175,12 @@ func generateSecret() string {
 	return base64.StdEncoding.EncodeToString(secret)
 }
 
-// Feed represents the YouTube video feed XML structure
+// The structs represent a YouTube video, watchlist, and channel XML structure
 type Feed struct {
 	XMLName xml.Name `xml:"feed"`
 	Entries []Entry  `xml:"entry"`
 }
 
-// Entry represents a video entry in the feed
 type Entry struct {
 	ID        string `xml:"id"`
 	VideoID   string `xml:"videoId"`
@@ -199,19 +192,16 @@ type Entry struct {
 	Updated   string `xml:"updated"`
 }
 
-// Link represents a link in the feed
 type Link struct {
 	Rel  string `xml:"rel,attr"`
 	Href string `xml:"href,attr"`
 }
 
-// Author represents the video author in the feed
 type Author struct {
 	Name string `xml:"name"`
 	URI  string `xml:"uri"`
 }
 
-// ProcessVideoNotification processes an incoming video notification
 func (s *PubSubService) ProcessVideoNotification(body []byte, signature string) error {
 	channelID, err := s.verifySignature(body, signature)
 	if err != nil {
@@ -236,17 +226,15 @@ func (s *PubSubService) ProcessVideoNotification(body []byte, signature string) 
 	return nil
 }
 
-// verifySignature verifies the HMAC signature of a notification and returns the channel ID
 func (s *PubSubService) verifySignature(body []byte, signature string) (string, error) {
-	// Get the signature from the header - handle both formats
 	actualSignature := signature
 	if strings.HasPrefix(signature, "sha1=") {
 		hexSignature := signature[5:]
-		// Decode hex to bytes
-		decodedBytes, err := hex.DecodeString(hexSignature)
+		decodedBytes, err := hex.DecodeString(hexSignature) // convert hex to bytes
 		if err != nil {
 			return "", fmt.Errorf("invalid signature format: %w", err)
 		}
+		
 		// Encode bytes to base64 to match our format
 		actualSignature = base64.StdEncoding.EncodeToString(decodedBytes)
 	}

@@ -30,30 +30,17 @@ type PubSubServiceInterface interface {
 
 type WatchlistService struct {
 	db             *gorm.DB
+	config         *configs.Config
 	youtubeService YouTubeServiceInterface
 	pubsubService  PubSubServiceInterface
-	config         *configs.Config
 }
 
-func NewWatchlistService(db *gorm.DB, config *configs.Config) *WatchlistService {
-	var youtubeService YouTubeServiceInterface
-	var pubsubService PubSubServiceInterface
-	
-	if config != nil && config.YouTube.APIKey != "" {
-		var err error
-		youtubeService, err = NewYouTubeService(config)
-		if err != nil {
-			log.Printf("Warning: YouTube service initialization failed: %v", err)
-		}
-	} else {
-		log.Printf("YouTube API key not provided, YouTube features will be disabled")
-	}
-	
+func NewWatchlistService(db *gorm.DB, config *configs.Config, youtubeService YouTubeServiceInterface) *WatchlistService {
 	return &WatchlistService{
 		db:             db,
-		youtubeService: youtubeService,
-		pubsubService:  pubsubService,
 		config:         config,
+		youtubeService: youtubeService,
+		pubsubService:  nil, // later via SetPubSubService if available
 	}
 }
 
@@ -164,7 +151,6 @@ func (s *WatchlistService) AddChannelToWatchlist(watchlistID, userID uint, chann
 		return ErrMissingAPIKey
 	}
 
-	// Use YouTube API to get channel info - this is done outside the transaction since it's an external call
 	channelInfo, err := s.youtubeService.GetChannelInfo(channelID)
 	if err != nil {
 		tx.Rollback()

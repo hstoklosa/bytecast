@@ -16,17 +16,18 @@ import (
 	"bytecast/internal/services"
 )
 
-// Server represents the HTTP server and its dependencies
 type Server struct {
-	// Infrastructure
-	router  *gin.Engine
-	db      *database.Connection
-	cfg     *configs.Config
-	server  *http.Server
-	logger  *log.Logger
+	/* Infrastructure */ 
+	router       *gin.Engine
+	db           *database.Connection
+	cfg          *configs.Config
+	configStatus *configs.ConfigStatus
+	server       *http.Server
+	logger       *log.Logger
 	
-	// Services
+	/* Dependencies */
 	videoService     *services.VideoService
+	youtubeService   *services.YouTubeService
 	pubsubService    *services.PubSubService
 	watchlistService *services.WatchlistService
 	authService      *services.AuthService
@@ -34,12 +35,10 @@ type Server struct {
 
 // New creates a new server instance with all dependencies injected
 func New(cfg *configs.Config, db *database.Connection, logger *log.Logger) (*Server, error) {
-	// Set mode based on environment
 	if cfg.Server.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// Initialize the router with middleware
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.ErrorHandler())
@@ -47,22 +46,20 @@ func New(cfg *configs.Config, db *database.Connection, logger *log.Logger) (*Ser
 	router.Use(middleware.Logger(logger))
 	router.Use(middleware.CORS())
 	
-	// Create the server instance
 	s := &Server{
-		router: router,
-		db:     db,
-		cfg:    cfg,
-		logger: logger,
+		router:      router,
+		db:          db,
+		cfg:         cfg,
+		configStatus: cfg.GetConfigStatus(),
+		logger:      logger,
 	}
 
-	// Initialize services and handlers
 	if err := s.initServices(); err != nil {
 		return nil, fmt.Errorf("failed to initialize services: %w", err)
 	}
 	
 	s.setupRoutes()
 	
-	// Configure the HTTP server with timeouts
 	s.server = &http.Server{
 		Addr:              fmt.Sprintf("0.0.0.0:%s", cfg.Server.Port),
 		Handler:           router,
@@ -75,7 +72,6 @@ func New(cfg *configs.Config, db *database.Connection, logger *log.Logger) (*Ser
 	return s, nil
 }
 
-// Start starts the HTTP server
 func (s *Server) Start() error {
 	s.logger.Printf("Starting server on port %s", s.cfg.Server.Port)
 	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -84,20 +80,35 @@ func (s *Server) Start() error {
 	return nil
 }
 
-// Shutdown gracefully shuts down the server
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Println("Shutting down server...")
 	return s.server.Shutdown(ctx)
 }
 
-// initServices initializes all the application services
 func (s *Server) initServices() error {
 	db := s.db.DB()
-	
 	s.videoService = services.NewVideoService(db)
-	s.pubsubService = services.NewPubSubService(db, s.cfg, s.videoService)
-	s.watchlistService = services.NewWatchlistService(db, s.cfg)
-	s.watchlistService.SetPubSubService(s.pubsubService)
+	
+	if s.configStatus.YouTubeAPIEnabled {
+		var err error
+		s.youtubeService, err = services.NewYouTubeService(s.cfg)
+		if err != nil {
+			return fmt.Errorf("failed to initialize YouTube service: %w", err)
+		}
+		s.logger.Println("YouTube service initialized successfully")
+	}
+	
+	if s.configStatus.PubSubEnabled {
+		s.pubsubService = services.NewPubSubService(db, s.cfg, s.videoService)
+		s.logger.Println("PubSub service initialized successfully")
+	}
+	
+	s.watchlistService = services.NewWatchlistService(db, s.cfg, s.youtubeService)
+	
+	if s.pubsubService != nil {
+		s.watchlistService.SetPubSubService(s.pubsubService)
+	}
+	
 	s.authService = services.NewAuthService(db, s.watchlistService, s.cfg.JWT.Secret)
 	
 	return nil
@@ -120,24 +131,17 @@ func (s *Server) newPubSubHandler() *handler.YouTubePubSubHandler {
 	return handler.NewYouTubePubSubHandler(s.pubsubService)
 }
 
-// setupRoutes configures all API routes
 func (s *Server) setupRoutes() {
-	// Auth middleware
-	authMiddleware := middleware.AuthMiddleware([]byte(s.cfg.JWT.Secret))
-
-	// Health routes (no auth required)
 	healthHandler := s.newHealthHandler()
 	healthHandler.RegisterRoutes(s.router)
 	
-	// Auth routes (no auth required)
+	authMiddleware := middleware.AuthMiddleware([]byte(s.cfg.JWT.Secret))	
 	authHandler := s.newAuthHandler()
 	authHandler.RegisterRoutes(s.router)
-	
-	// Routes requiring authentication
+
 	watchlistHandler := s.newWatchlistHandler()
 	watchlistHandler.RegisterRoutes(s.router, authMiddleware)
 	
-	// PubSub webhook handler (no auth required)
 	if s.pubsubService != nil {
 		pubsubHandler := s.newPubSubHandler()
 		pubsubHandler.RegisterRoutes(s.router)

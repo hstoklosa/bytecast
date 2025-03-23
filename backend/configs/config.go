@@ -8,9 +8,10 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/joho/godotenv"
+
+	apperrors "bytecast/internal/errors"
 )
 
-// Config holds all configuration for the application
 type Config struct {
     Database  Database  `validate:"required"`
     JWT       JWT       `validate:"required"`
@@ -44,12 +45,11 @@ type Server struct {
 }
 
 type YouTube struct {
-    APIKey       string
+   APIKey       string
     CallbackURL  string
     LeaseSeconds int
 }
 
-// Load returns a validated configuration struct
 func Load() (*Config, error) {
 	if err := godotenv.Load("../../.env"); err != nil {
 		log.Printf("Note: .env file not found, using environment variables")
@@ -84,19 +84,11 @@ func Load() (*Config, error) {
         },
     }
 
-    if cfg.JWT.Secret == "" {
-        log.Printf("Warning: JWT_SECRET not set")
-    }
-    
-    if cfg.YouTube.APIKey == "" {
-        log.Printf("Warning: YOUTUBE_API_KEY not set, YouTube API features will be disabled")
-    }
-
     if err := validateConfig(cfg); err != nil {
         return nil, fmt.Errorf("config validation error: %w", err)
     }
 
-    log.Printf("Configuration loaded successfully")
+    logConfigStatus(cfg)
     return cfg, nil
 }
 
@@ -127,8 +119,55 @@ func getEnvInt(key string, defaultValue int) int {
 
 func validateConfig(cfg *Config) error {
     validate := validator.New()
+    
     if err := validate.Struct(cfg); err != nil {
         return err
     }
+    
+    if len(cfg.JWT.Secret) < 32 {
+        return apperrors.NewInvalidConfigError("JWT_SECRET", "must be at least 32 characters long", nil)
+    }
+    
+    if cfg.YouTube.APIKey != "" {
+        // api key is provided but callback URL is missing
+        if cfg.YouTube.LeaseSeconds > 0 && cfg.YouTube.CallbackURL == "" {
+            return apperrors.NewInvalidConfigError("YOUTUBE_WEBSUB_CALLBACK_URL", 
+                "required when YOUTUBE_API_KEY and YOUTUBE_WEBSUB_LEASE_SECONDS are provided", nil)
+        }
+    }
+    
     return nil
+}
+
+func logConfigStatus(cfg *Config) {
+    log.Printf("Database connection: %s:%s", cfg.Database.Host, cfg.Database.Port)
+    log.Printf("Server port: %s, Environment: %s", cfg.Server.Port, cfg.Server.Environment)
+    
+    youtubeAPIEnabled := cfg.YouTube.APIKey != ""
+    pubSubEnabled := youtubeAPIEnabled && cfg.YouTube.CallbackURL != ""
+    
+    if youtubeAPIEnabled {
+        log.Printf("YouTube API: Enabled")
+    } else {
+        log.Printf("Warning: YouTube API disabled (YOUTUBE_API_KEY not set)")
+    }
+    
+    if pubSubEnabled {
+        log.Printf("YouTube PubSub: Enabled (lease seconds: %d)", cfg.YouTube.LeaseSeconds)
+    } else if youtubeAPIEnabled {
+        log.Printf("Warning: YouTube PubSub disabled (YOUTUBE_WEBSUB_CALLBACK_URL not set)")
+    }
+}
+
+type ConfigStatus struct {
+    YouTubeAPIEnabled bool
+    PubSubEnabled     bool
+}
+
+func (c *Config) GetConfigStatus() *ConfigStatus {
+    status := &ConfigStatus{
+        YouTubeAPIEnabled: c.YouTube.APIKey != "",
+    }
+    status.PubSubEnabled = status.YouTubeAPIEnabled && c.YouTube.CallbackURL != ""
+    return status
 }
