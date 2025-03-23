@@ -27,10 +27,8 @@ const (
 	feedURL = "https://www.youtube.com/xml/feeds/videos.xml?channel_id=%s"
 )
 
-// ErrPubSubHubError is returned when there's an error communicating with the PubSubHubbub hub
 var ErrPubSubHubError = errors.New("error communicating with PubSubHubbub hub")
 
-// PubSubService handles YouTube channel subscriptions via PubSubHubbub
 type PubSubService struct {
 	db             *gorm.DB
 	config         *configs.Config

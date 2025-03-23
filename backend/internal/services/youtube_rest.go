@@ -59,7 +59,7 @@ func NewYouTubeService(config *configs.Config) (*YouTubeService, error) {
 func (s *YouTubeService) GetChannelInfo(channelID string) (*ChannelInfo, error) {
 	ctx := context.Background()
 	
-	// youtube service with the API key
+	// Youtube service with the API key
 	youtubeService, err := youtube.NewService(ctx, option.WithAPIKey(s.apiKey))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrYouTubeAPIError, err)

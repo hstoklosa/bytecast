@@ -9,12 +9,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// YouTubePubSubHandler handles PubSubHubbub notifications and verification requests
 type YouTubePubSubHandler struct {
 	pubsubService *services.PubSubService
 }
 
-// NewYouTubePubSubHandler creates a new PubSubHubbub handler
 func NewYouTubePubSubHandler(pubsubService *services.PubSubService) *YouTubePubSubHandler {
 	if pubsubService == nil {
 		log.Printf("PubSub service is nil")
@@ -25,14 +23,12 @@ func NewYouTubePubSubHandler(pubsubService *services.PubSubService) *YouTubePubS
 	}
 }
 
-// RegisterRoutes registers all PubSubHubbub routes
 func (h *YouTubePubSubHandler) RegisterRoutes(r *gin.Engine) {
 	callbackPath := "/pubsub/callback"
 	r.GET(callbackPath, h.HandleVerification)
 	r.POST(callbackPath, h.HandleNotification)
 }
 
-// HandleVerification handles the initial subscription verification request
 func (h *YouTubePubSubHandler) HandleVerification(c *gin.Context) {
 	mode := c.Query("hub.mode")
 	challenge := c.Query("hub.challenge")
@@ -53,7 +49,6 @@ func (h *YouTubePubSubHandler) HandleVerification(c *gin.Context) {
 	}
 }
 
-// HandleNotification processes incoming video notifications
 func (h *YouTubePubSubHandler) HandleNotification(c *gin.Context) {
 	signature := c.GetHeader("X-Hub-Signature")
 	if signature == "" {
