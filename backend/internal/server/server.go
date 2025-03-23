@@ -5,104 +5,145 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"bytecast/api/handler"
+	"bytecast/api/middleware"
 	"bytecast/configs"
 	"bytecast/internal/database"
 	"bytecast/internal/services"
 )
 
-// Server represents the HTTP server and its dependencies
 type Server struct {
-	// Infrastructure
-	router  *gin.Engine
-	db      *database.Connection
-	cfg     *configs.Config
-	server  *http.Server
+	/* Infrastructure */ 
+	router       *gin.Engine
+	db           *database.Connection
+	cfg          *configs.Config
+	configStatus *configs.ConfigStatus
+	server       *http.Server
+	logger       *log.Logger
 	
-	// Services
+	/* Dependencies */
 	videoService     *services.VideoService
+	youtubeService   *services.YouTubeService
 	pubsubService    *services.PubSubService
 	watchlistService *services.WatchlistService
 	authService      *services.AuthService
-	
-	// Middleware
-	authMiddleware gin.HandlerFunc
-	
-	// Handlers
-	authHandler      *handler.AuthHandler
-	watchlistHandler *handler.WatchlistHandler
-	pubsubHandler    *handler.YouTubePubSubHandler
 }
 
-// New creates a new server instance
-func New(cfg *configs.Config, db *database.Connection) *Server {
-	router := gin.Default()
-
-	return &Server{
-		router: router,
-		db:     db,
-		cfg:    cfg,
+// New creates a new server instance with all dependencies injected
+func New(cfg *configs.Config, db *database.Connection, logger *log.Logger) (*Server, error) {
+	if cfg.Server.Environment == "production" {
+		gin.SetMode(gin.ReleaseMode)
 	}
-}
 
-// Start initializes and starts the server with graceful shutdown
-func (s *Server) Start() error {
-	// Step 1: Initialize all services
+	router := gin.New()
+	router.Use(gin.Recovery())
+	router.Use(middleware.ErrorHandler())
+	router.Use(middleware.RequestID())
+	router.Use(middleware.Logger(logger))
+	router.Use(middleware.CORS())
+	
+	s := &Server{
+		router:      router,
+		db:          db,
+		cfg:         cfg,
+		configStatus: cfg.GetConfigStatus(),
+		logger:      logger,
+	}
+
 	if err := s.initServices(); err != nil {
-		return fmt.Errorf("failed to initialize services: %w", err)
+		return nil, fmt.Errorf("failed to initialize services: %w", err)
 	}
 	
-	// Step 2: Initialize all handlers
-	s.initHandlers()
-	
-	// Step 3: Set up all routes
 	s.setupRoutes()
 	
-	// Step 4: Configure HTTP server
 	s.server = &http.Server{
-		Addr:    "0.0.0.0:" + s.cfg.Server.Port,
-		Handler: s.router,
+		Addr:              fmt.Sprintf("0.0.0.0:%s", cfg.Server.Port),
+		Handler:           router,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
+	
+	return s, nil
+}
 
-	// Channel to listen for errors coming from the listener
-	serverErrors := make(chan error, 1)
-
-	// Start the server
-	go func() {
-		log.Printf("Server is running on port %s", s.cfg.Server.Port)
-		serverErrors <- s.server.ListenAndServe()
-	}()
-
-	// Channel to listen for an interrupt or terminate signal from the OS
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
-
-	// Blocking select for shutdown signal or server error
-	select {
-	case err := <-serverErrors:
+func (s *Server) Start() error {
+	s.logger.Printf("Starting server on port %s", s.cfg.Server.Port)
+	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("server error: %w", err)
-
-	case sig := <-shutdown:
-		log.Printf("Start shutdown... Signal: %v", sig)
-
-		// Give outstanding requests a deadline for completion
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-
-		// Asking listener to shut down and shed load
-		if err := s.server.Shutdown(ctx); err != nil {
-			// Error from closing listeners, or context timeout
-			s.server.Close()
-			return fmt.Errorf("could not stop server gracefully: %w", err)
-		}
 	}
-
 	return nil
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.logger.Println("Shutting down server...")
+	return s.server.Shutdown(ctx)
+}
+
+func (s *Server) initServices() error {
+	db := s.db.DB()
+	s.videoService = services.NewVideoService(db)
+	
+	if s.configStatus.YouTubeAPIEnabled {
+		var err error
+		s.youtubeService, err = services.NewYouTubeService(s.cfg)
+		if err != nil {
+			return fmt.Errorf("failed to initialize YouTube service: %w", err)
+		}
+		s.logger.Println("YouTube service initialized successfully")
+	}
+	
+	if s.configStatus.PubSubEnabled {
+		s.pubsubService = services.NewPubSubService(db, s.cfg, s.videoService)
+		s.logger.Println("PubSub service initialized successfully")
+	}
+	
+	s.watchlistService = services.NewWatchlistService(db, s.cfg, s.youtubeService)
+	
+	if s.pubsubService != nil {
+		s.watchlistService.SetPubSubService(s.pubsubService)
+	}
+	
+	s.authService = services.NewAuthService(db, s.watchlistService, s.cfg.JWT.Secret)
+	
+	return nil
+}
+
+// Factory methods for handlers
+func (s *Server) newHealthHandler() *handler.HealthHandler {
+	return handler.NewHealthHandler(s.db, s.cfg, s.pubsubService)
+}
+
+func (s *Server) newAuthHandler() *handler.AuthHandler {
+	return handler.NewAuthHandler(s.authService, s.cfg)
+}
+
+func (s *Server) newWatchlistHandler() *handler.WatchlistHandler {
+	return handler.NewWatchlistHandler(s.watchlistService)
+}
+
+func (s *Server) newPubSubHandler() *handler.YouTubePubSubHandler {
+	return handler.NewYouTubePubSubHandler(s.pubsubService)
+}
+
+func (s *Server) setupRoutes() {
+	healthHandler := s.newHealthHandler()
+	healthHandler.RegisterRoutes(s.router)
+	
+	authMiddleware := middleware.AuthMiddleware([]byte(s.cfg.JWT.Secret))	
+	authHandler := s.newAuthHandler()
+	authHandler.RegisterRoutes(s.router)
+
+	watchlistHandler := s.newWatchlistHandler()
+	watchlistHandler.RegisterRoutes(s.router, authMiddleware)
+	
+	if s.pubsubService != nil {
+		pubsubHandler := s.newPubSubHandler()
+		pubsubHandler.RegisterRoutes(s.router)
+	}
 }

@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 
@@ -18,64 +19,42 @@ var (
 	ErrInvalidYouTubeID  = errors.New("invalid YouTube channel ID or URL")
 )
 
-// YouTubeServiceInterface defines the interface for YouTube service
 type YouTubeServiceInterface interface {
 	GetChannelInfo(channelID string) (*ChannelInfo, error)
 }
 
-// PubSubServiceInterface defines the interface for YouTube PubSubHubbub operations
 type PubSubServiceInterface interface {
 	SubscribeToChannel(channelID string) error
 	UnsubscribeFromChannel(channelID string) error
 }
 
-// WatchlistService handles operations related to watchlists and channels
 type WatchlistService struct {
 	db             *gorm.DB
+	config         *configs.Config
 	youtubeService YouTubeServiceInterface
 	pubsubService  PubSubServiceInterface
-	config         *configs.Config
 }
 
-// NewWatchlistService creates a new watchlist service
-func NewWatchlistService(db *gorm.DB, config *configs.Config) *WatchlistService {
-	var youtubeService YouTubeServiceInterface
-	var pubsubService PubSubServiceInterface
-	
-	// Only try to initialize YouTube service if API key is provided
-	if config != nil && config.YouTube.APIKey != "" {
-		var err error
-		youtubeService, err = NewYouTubeService(config)
-		if err != nil {
-			// Log the error but continue without YouTube service
-			log.Printf("Warning: YouTube service initialization failed: %v", err)
-		}
-	} else {
-		log.Printf("YouTube API key not provided, YouTube features will be disabled")
-	}
-	
+func NewWatchlistService(db *gorm.DB, config *configs.Config, youtubeService YouTubeServiceInterface) *WatchlistService {
 	return &WatchlistService{
 		db:             db,
-		youtubeService: youtubeService,
-		pubsubService:  pubsubService,
 		config:         config,
+		youtubeService: youtubeService,
+		pubsubService:  nil, // later via SetPubSubService if available
 	}
 }
 
-// CreateDefaultWatchlist creates a default watchlist for a newly registered user
 func (s *WatchlistService) CreateDefaultWatchlist(userID uint) error {
 	watchlist := models.Watchlist{
 		UserID:      userID,
 		Name:        "Default",
 		Description: "Your default watchlist",
-		Color:       "#3b82f6", // Default blue color
+		Color:       "#3b82f6",
 	}
 	return s.db.Create(&watchlist).Error
 }
 
-// CreateWatchlist creates a new watchlist for a user
 func (s *WatchlistService) CreateWatchlist(userID uint, name, description, color string) (*models.Watchlist, error) {
-	// Validate userID
 	if userID == 0 {
 		return nil, errors.New("user ID is required")
 	}
@@ -94,7 +73,6 @@ func (s *WatchlistService) CreateWatchlist(userID uint, name, description, color
 	return &watchlist, nil
 }
 
-// GetWatchlist retrieves a watchlist by ID, ensuring it belongs to the specified user
 func (s *WatchlistService) GetWatchlist(watchlistID, userID uint) (*models.Watchlist, error) {
 	var watchlist models.Watchlist
 	if err := s.db.Preload("Channels").Where("id = ? AND user_id = ?", watchlistID, userID).First(&watchlist).Error; err != nil {
@@ -107,7 +85,6 @@ func (s *WatchlistService) GetWatchlist(watchlistID, userID uint) (*models.Watch
 	return &watchlist, nil
 }
 
-// GetUserWatchlists retrieves all watchlists for a user
 func (s *WatchlistService) GetUserWatchlists(userID uint) ([]models.Watchlist, error) {
 	var watchlists []models.Watchlist
 	if err := s.db.Where("user_id = ?", userID).Find(&watchlists).Error; err != nil {
@@ -117,7 +94,6 @@ func (s *WatchlistService) GetUserWatchlists(userID uint) ([]models.Watchlist, e
 	return watchlists, nil
 }
 
-// UpdateWatchlist updates a watchlist's name, description, and color
 func (s *WatchlistService) UpdateWatchlist(watchlistID, userID uint, name, description, color string) (*models.Watchlist, error) {
 	watchlist, err := s.GetWatchlist(watchlistID, userID)
 	if err != nil {
@@ -135,7 +111,6 @@ func (s *WatchlistService) UpdateWatchlist(watchlistID, userID uint, name, descr
 	return watchlist, nil
 }
 
-// DeleteWatchlist deletes a watchlist
 func (s *WatchlistService) DeleteWatchlist(watchlistID, userID uint) error {
 	result := s.db.Where("id = ? AND user_id = ?", watchlistID, userID).Delete(&models.Watchlist{})
 	if result.Error != nil {
@@ -149,94 +124,144 @@ func (s *WatchlistService) DeleteWatchlist(watchlistID, userID uint) error {
 	return nil
 }
 
-// AddChannelToWatchlist adds a channel to a watchlist
 func (s *WatchlistService) AddChannelToWatchlist(watchlistID, userID uint, channelID string) error {
+	tx := s.db.Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("failed to start transaction: %w", tx.Error)
+	}
+	
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
 	// Verify watchlist belongs to user
-	watchlist, err := s.GetWatchlist(watchlistID, userID)
-	if err != nil {
+	var watchlist models.Watchlist
+	if err := tx.Where("id = ? AND user_id = ?", watchlistID, userID).First(&watchlist).Error; err != nil {
+		tx.Rollback()
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrWatchlistNotFound
+		}
 		return err
 	}
 
-	// Check if YouTube service is available
 	if s.youtubeService == nil {
+		tx.Rollback()
 		return ErrMissingAPIKey
 	}
 
-	// Use YouTube API to get channel info
 	channelInfo, err := s.youtubeService.GetChannelInfo(channelID)
 	if err != nil {
+		tx.Rollback()
 		if errors.Is(err, ErrInvalidYouTubeURL) || errors.Is(err, ErrChannelNotFoundAPI) {
 			return ErrInvalidYouTubeID
 		}
 		return err
 	}
 
-	// Check if channel already exists in database
 	var channel models.Channel
-	err = s.db.Where("youtube_id = ?", channelInfo.ID).First(&channel).Error
+	err = tx.Where("youtube_id = ?", channelInfo.ID).First(&channel).Error
+	
+	needsSubscription := false
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		// Create new channel with data from YouTube API
-		channel = models.Channel{
-			YoutubeID:     channelInfo.ID,
-			Title:         channelInfo.Title,
-			Description:   channelInfo.Description,
-			ThumbnailURL:  channelInfo.Thumbnail,
-		}
-		if err := s.db.Create(&channel).Error; err != nil {
-			return err
-		}
+		var softDeletedChannel models.Channel
+		err = tx.Unscoped().Where("youtube_id = ?", channelInfo.ID).First(&softDeletedChannel).Error
 		
-		// Subscribe to channel in PubSubHubbub if service is available
-		if s.pubsubService != nil {
-			if err := s.pubsubService.SubscribeToChannel(channelInfo.ID); err != nil {
-				// Log the error but continue - we can still add the channel to the watchlist
-				log.Printf("Warning: Failed to subscribe to YouTube PubSubHubbub for channel %s: %v", channelInfo.ID, err)
-			} else {
-				log.Printf("Successfully subscribed to YouTube PubSubHubbub for channel %s", channelInfo.ID)
+		if err == nil {
+			softDeletedChannel.DeletedAt = gorm.DeletedAt{}
+			softDeletedChannel.Title = channelInfo.Title
+			softDeletedChannel.Description = channelInfo.Description
+			softDeletedChannel.ThumbnailURL = channelInfo.Thumbnail
+			
+			if err := tx.Unscoped().Save(&softDeletedChannel).Error; err != nil {
+				tx.Rollback()
+				return err
 			}
+			
+			channel = softDeletedChannel
+		} else {
+			channel = models.Channel{
+				YoutubeID:     channelInfo.ID,
+				Title:         channelInfo.Title,
+				Description:   channelInfo.Description,
+				ThumbnailURL:  channelInfo.Thumbnail,
+			}
+			if err := tx.Create(&channel).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+			
+			needsSubscription = true
 		}
 	} else if err != nil {
+		tx.Rollback()
 		return err
 	} else {
-		// Update existing channel with latest data from YouTube
 		channel.Title = channelInfo.Title
 		channel.Description = channelInfo.Description
 		channel.ThumbnailURL = channelInfo.Thumbnail
-		if err := s.db.Save(&channel).Error; err != nil {
+		if err := tx.Save(&channel).Error; err != nil {
+			tx.Rollback()
 			return err
 		}
 	}
 
-	// Check if channel is already in the watchlist
 	var exists int64
-	err = s.db.Model(&models.Watchlist{}).
+	err = tx.Model(&models.Watchlist{}).
 		Joins("JOIN watchlist_channels ON watchlist_channels.watchlist_id = watchlists.id").
-		Joins("JOIN channels ON watchlist_channels.channel_id = channels.id").
-		Where("watchlists.id = ? AND channels.youtube_id = ?", watchlistID, channelInfo.ID).
+		Where("watchlists.id = ? AND watchlist_channels.channel_id = ?", watchlistID, channel.ID).
 		Count(&exists).Error
 	
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	
-	if exists > 0 {
-		// Channel is already in the watchlist, no need to add it again
-		return nil
+	if exists == 0 {
+		if err := tx.Exec("INSERT INTO watchlist_channels (watchlist_id, channel_id) VALUES (?, ?)", 
+			watchlistID, channel.ID).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
 	}
 
-	// Add channel to watchlist
-	return s.db.Model(watchlist).Association("Channels").Append(&channel)
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+	
+	if needsSubscription && s.pubsubService != nil {
+		if err := s.pubsubService.SubscribeToChannel(channelInfo.ID); err != nil {
+			log.Printf("Warning: Failed to subscribe to YouTube PubSubHubbub for channel %s: %v", channelInfo.ID, err)
+		} else {
+			log.Printf("Successfully subscribed to YouTube PubSubHubbub for channel %s", channelInfo.ID)
+		}
+	}
+
+	return nil
 }
 
-// RemoveChannelFromWatchlist removes a channel from a watchlist
 func (s *WatchlistService) RemoveChannelFromWatchlist(watchlistID, userID uint, channelID string) error {
-	// Verify watchlist belongs to user
-	watchlist, err := s.GetWatchlist(watchlistID, userID)
-	if err != nil {
+	tx := s.db.Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("failed to start transaction: %w", tx.Error)
+	}
+	
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	var watchlist models.Watchlist
+	if err := tx.Where("id = ? AND user_id = ?", watchlistID, userID).First(&watchlist).Error; err != nil {
+		tx.Rollback()
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrWatchlistNotFound
+		}
 		return err
 	}
 
-	// Try to extract channel ID if it's a URL and YouTube service is available
 	extractedID := channelID
 	if s.youtubeService != nil && (strings.Contains(channelID, "/") || strings.Contains(channelID, "@")) {
 		channelInfo, err := s.youtubeService.GetChannelInfo(channelID)
@@ -245,38 +270,80 @@ func (s *WatchlistService) RemoveChannelFromWatchlist(watchlistID, userID uint, 
 		}
 	}
 
-	// Find channel
 	var channel models.Channel
-	if err := s.db.Where("youtube_id = ?", extractedID).First(&channel).Error; err != nil {
+	if err := tx.Where("youtube_id = ?", extractedID).First(&channel).Error; err != nil {
+		tx.Rollback()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrChannelNotFound
 		}
 		return err
 	}
 
-	// Remove channel from watchlist
-	if err := s.db.Model(watchlist).Association("Channels").Delete(&channel); err != nil {
-		return err
+	if err := tx.Exec(`
+		DELETE FROM watchlist_videos
+		WHERE watchlist_id = ? AND video_id IN (
+			SELECT id FROM youtube_videos WHERE channel_id = ?
+		)
+	`, watchlistID, channel.ID).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to remove videos from watchlist: %w", err)
+	}
+
+	if err := tx.Exec("DELETE FROM watchlist_channels WHERE watchlist_id = ? AND channel_id = ?", 
+		watchlistID, channel.ID).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to remove channel from watchlist: %w", err)
 	}
 	
-	// Check if this channel is still being used by other watchlists
 	var usageCount int64
-	if err := s.db.Model(&models.Watchlist{}).
+	if err := tx.Model(&models.Watchlist{}).
 		Joins("JOIN watchlist_channels ON watchlist_channels.watchlist_id = watchlists.id").
 		Where("watchlist_channels.channel_id = ?", channel.ID).
 		Count(&usageCount).Error; err != nil {
-		log.Printf("Error checking channel usage: %v", err)
-	} else if usageCount == 0 {
-		// If channel is no longer used by any watchlist, unsubscribe from PubSubHubbub
-		if err := s.pubsubService.UnsubscribeFromChannel(extractedID); err != nil {
-			log.Printf("Warning: Failed to unsubscribe from YouTube PubSubHubbub for channel %s: %v", extractedID, err)
+		tx.Rollback()
+		return fmt.Errorf("failed to check channel usage: %w", err)
+	}
+	
+	needsCleanup := usageCount == 0
+	
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+	
+	if needsCleanup {
+		if s.pubsubService != nil {
+			if err := s.pubsubService.UnsubscribeFromChannel(extractedID); err != nil {
+				log.Printf("Warning: Failed to unsubscribe from YouTube PubSubHubbub for channel %s: %v", extractedID, err)
+			}
+		}
+		
+		cleanupTx := s.db.Begin()
+		if cleanupTx.Error != nil {
+			log.Printf("Warning: Failed to start cleanup transaction: %v", cleanupTx.Error)
+			return nil
+		}
+		
+		// Soft-delete videos related to this channel
+		if err := cleanupTx.Where("channel_id = ?", channel.ID).Delete(&models.Video{}).Error; err != nil {
+			cleanupTx.Rollback()
+			log.Printf("Warning: Failed to delete channel videos: %v", err)
+			return nil
+		}
+		
+		if err := cleanupTx.Delete(&channel).Error; err != nil {
+			cleanupTx.Rollback()
+			log.Printf("Warning: Failed to delete channel: %v", err)
+			return nil
+		}
+		
+		if err := cleanupTx.Commit().Error; err != nil {
+			log.Printf("Warning: Failed to commit cleanup transaction: %v", err)
 		}
 	}
 	
 	return nil
 }
 
-// GetChannelsInWatchlist retrieves all channels in a watchlist
 func (s *WatchlistService) GetChannelsInWatchlist(watchlistID, userID uint) ([]models.Channel, error) {
 	watchlist, err := s.GetWatchlist(watchlistID, userID)
 	if err != nil {
@@ -296,7 +363,6 @@ func (s *WatchlistService) SetYouTubeService(youtubeService YouTubeServiceInterf
 	s.youtubeService = youtubeService
 }
 
-// SetPubSubService sets the PubSub service
 func (s *WatchlistService) SetPubSubService(pubsubService PubSubServiceInterface) {
 	s.pubsubService = pubsubService
 }

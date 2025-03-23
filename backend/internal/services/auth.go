@@ -15,10 +15,10 @@ import (
 
 var (
     ErrInvalidCredentials = errors.New("invalid email or password")
-    ErrUserExists        = errors.New("user already exists")
-    ErrUsernameTaken     = errors.New("username already taken")
-    ErrTokenInvalid      = errors.New("invalid token")
-    ErrTokenRevoked      = errors.New("token has been revoked")
+    ErrUserExists         = errors.New("user already exists")
+    ErrUsernameTaken      = errors.New("username already taken")
+    ErrTokenInvalid       = errors.New("invalid token")
+    ErrTokenRevoked       = errors.New("token has been revoked")
 )
 
 type TokenPair struct {
@@ -39,13 +39,12 @@ func NewAuthService(db *gorm.DB, watchlistSvc *WatchlistService, jwtSecret strin
         db:           db,
         watchlistSvc: watchlistSvc,
         jwtSecret:    []byte(jwtSecret),
-        accessExp:    15 * time.Minute,  // 15 minutes
+        accessExp:    15 * time.Minute,   // 15 minutes
         refreshExp:   7 * 24 * time.Hour, // 7 days
     }
 }
 
 func (s *AuthService) RegisterUser(email, username, password string) error {
-    // Start transaction
     tx := s.db.Begin()
     if tx.Error != nil {
         return tx.Error
@@ -94,7 +93,6 @@ func (s *AuthService) RegisterUser(email, username, password string) error {
         return err
     }
 
-    // Create default watchlist
     if err := s.watchlistSvc.CreateDefaultWatchlist(user.ID); err != nil {
         tx.Rollback()
         return err
@@ -145,7 +143,6 @@ func (s *AuthService) RefreshTokens(refreshToken string) (*TokenPair, time.Time,
         return nil, time.Time{}, ErrTokenInvalid
     }
 
-    // Check if token is revoked
     isRevoked, err := s.IsTokenRevoked(refreshToken)
     if err != nil {
         return nil, time.Time{}, err
@@ -219,7 +216,6 @@ func (s *AuthService) hashToken(token string) string {
 }
 
 func (s *AuthService) generateTokenPair(userID uint) (*TokenPair, time.Time, error) {
-    // Generate Access Token
     accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
         "user_id": userID,
         "exp":     time.Now().Add(s.accessExp).Unix(),
@@ -231,7 +227,6 @@ func (s *AuthService) generateTokenPair(userID uint) (*TokenPair, time.Time, err
         return nil, time.Time{}, err
     }
 
-    // Generate Refresh Token
     refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
         "user_id": userID,
         "exp":     time.Now().Add(s.refreshExp).Unix(),
@@ -249,4 +244,12 @@ func (s *AuthService) generateTokenPair(userID uint) (*TokenPair, time.Time, err
         AccessToken:  accessTokenString,
         RefreshToken: refreshTokenString,
     }, exp, nil
+}
+
+func (s *AuthService) GetUserByID(id uint) (*models.User, error) {
+    var user models.User
+    if err := s.db.First(&user, id).Error; err != nil {
+        return nil, err
+    }
+    return &user, nil
 }

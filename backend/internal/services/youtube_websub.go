@@ -27,33 +27,36 @@ const (
 	feedURL = "https://www.youtube.com/xml/feeds/videos.xml?channel_id=%s"
 )
 
-// ErrPubSubHubError is returned when there's an error communicating with the PubSubHubbub hub
 var ErrPubSubHubError = errors.New("error communicating with PubSubHubbub hub")
 
-// PubSubService handles YouTube channel subscriptions via PubSubHubbub
 type PubSubService struct {
-	db           *gorm.DB
-	config       *configs.Config
-	client       *http.Client
-	videoService *VideoService
+	db             *gorm.DB
+	config         *configs.Config
+	client         *http.Client
+	videoService   *VideoService
+	youtubeService *YouTubeService
 }
 
-// NewPubSubService creates a new PubSub service instance
 func NewPubSubService(db *gorm.DB, config *configs.Config, videoService *VideoService) *PubSubService {
+	youtubeService, err := NewYouTubeService(config)
+	if err != nil {
+		log.Printf("Failed to create YouTube service for PubSub: %v", err)
+		return nil
+	}
+
 	return &PubSubService{
-		db:           db,
-		config:       config,
-		client:       &http.Client{Timeout: 10 * time.Second},
-		videoService: videoService,
+		db:             db,
+		config:         config,
+		client:         &http.Client{Timeout: 10 * time.Second},
+		videoService:   videoService,
+		youtubeService: youtubeService,
 	}
 }
 
-// SubscribeToChannel subscribes to a YouTube channel's notifications
 func (s *PubSubService) SubscribeToChannel(channelID string) error {
-	var existingSub models.YouTubeSubscription
+	var existingSub models.HubSubscription
 	err := s.db.Where("channel_id = ?", channelID).First(&existingSub).Error
 	
-	// Errors other than "not found" 
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("database error checking for existing subscription: %w", err)
 	}
@@ -66,7 +69,7 @@ func (s *PubSubService) SubscribeToChannel(channelID string) error {
 	}
 	
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		subscription := models.YouTubeSubscription{
+		subscription := models.HubSubscription{
 			ChannelID:     channelID,
 			LeaseSeconds:  leaseSeconds,
 			ExpiresAt:     expiresAt,
@@ -89,7 +92,6 @@ func (s *PubSubService) SubscribeToChannel(channelID string) error {
 		}
 	}
 
-	// Send subscription request to hub (keep the record if hub fails)
 	if err := s.sendSubscriptionRequest(channelID, existingSub.Secret, "subscribe"); err != nil {
 		log.Printf("Failed to subscribe to hub for channel %s: %v", channelID, err)
 	}
@@ -97,9 +99,8 @@ func (s *PubSubService) SubscribeToChannel(channelID string) error {
 	return nil
 }
 
-// UnsubscribeFromChannel unsubscribes from a YouTube channel's notifications
 func (s *PubSubService) UnsubscribeFromChannel(channelID string) error {
-	var subscription models.YouTubeSubscription
+	var subscription models.HubSubscription
 	if err := s.db.Where("channel_id = ?", channelID).First(&subscription).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			log.Printf("No subscription record found for channel %s", channelID)
@@ -139,8 +140,6 @@ func (s *PubSubService) sendSubscriptionRequest(channelID, secret, mode string) 
 	form.Set("hub.secret", secret)
 	form.Set("hub.verify", "async")
 	
-	// Only set lease seconds if greater than 0
-	// YouTube WebSub hub will use default (typically a few days) if not specified
 	if s.config.YouTube.LeaseSeconds > 0 {
 		form.Set("hub.lease_seconds", fmt.Sprintf("%d", s.config.YouTube.LeaseSeconds))
 	}
@@ -174,13 +173,12 @@ func generateSecret() string {
 	return base64.StdEncoding.EncodeToString(secret)
 }
 
-// Feed represents the YouTube video feed XML structure
+// The structs represent a YouTube video, watchlist, and channel XML structure
 type Feed struct {
 	XMLName xml.Name `xml:"feed"`
 	Entries []Entry  `xml:"entry"`
 }
 
-// Entry represents a video entry in the feed
 type Entry struct {
 	ID        string `xml:"id"`
 	VideoID   string `xml:"videoId"`
@@ -192,19 +190,16 @@ type Entry struct {
 	Updated   string `xml:"updated"`
 }
 
-// Link represents a link in the feed
 type Link struct {
 	Rel  string `xml:"rel,attr"`
 	Href string `xml:"href,attr"`
 }
 
-// Author represents the video author in the feed
 type Author struct {
 	Name string `xml:"name"`
 	URI  string `xml:"uri"`
 }
 
-// ProcessVideoNotification processes an incoming video notification
 func (s *PubSubService) ProcessVideoNotification(body []byte, signature string) error {
 	channelID, err := s.verifySignature(body, signature)
 	if err != nil {
@@ -229,8 +224,20 @@ func (s *PubSubService) ProcessVideoNotification(body []byte, signature string) 
 	return nil
 }
 
-// verifySignature verifies the HMAC signature of a notification and returns the channel ID
 func (s *PubSubService) verifySignature(body []byte, signature string) (string, error) {
+	actualSignature := signature
+	if strings.HasPrefix(signature, "sha1=") {
+		hexSignature := signature[5:]
+		decodedBytes, err := hex.DecodeString(hexSignature) // convert hex to bytes
+		if err != nil {
+			return "", fmt.Errorf("invalid signature format: %w", err)
+		}
+		
+		// Encode bytes to base64 to match our format
+		actualSignature = base64.StdEncoding.EncodeToString(decodedBytes)
+	}
+
+	// Parse feed to get channelID - needed to find the right secret
 	var feed Feed
 	if err := xml.Unmarshal(body, &feed); err != nil {
 		return "", fmt.Errorf("failed to parse feed: %w", err)
@@ -247,7 +254,7 @@ func (s *PubSubService) verifySignature(body []byte, signature string) (string, 
 	}
 
 	// Get subscription secret for the ChannelID
-	var subscription models.YouTubeSubscription
+	var subscription models.HubSubscription
 	if err := s.db.Where("channel_id = ?", channelID).First(&subscription).Error; err != nil {
 		return "", fmt.Errorf("subscription not found: %w", err)
 	}
@@ -257,21 +264,8 @@ func (s *PubSubService) verifySignature(body []byte, signature string) (string, 
 	mac.Write(body)
 	expectedSignature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 
-	// Remove sha1= prefix and decode hex signature
-	actualSignature := signature
-	if strings.HasPrefix(signature, "sha1=") {
-		hexSignature := signature[5:]
-		// Decode hex to bytes
-		decodedBytes, err := hex.DecodeString(hexSignature)
-		if err != nil {
-			return "", fmt.Errorf("invalid signature format: %w", err)
-		}
-		// Encode bytes to base64 to match our format
-		actualSignature = base64.StdEncoding.EncodeToString(decodedBytes)
-	}
-
 	if actualSignature != expectedSignature {
-		log.Printf("Signature mismatch. Expected: %s, Got: %s", expectedSignature, signature)
+		log.Printf("Signature mismatch. Expected: %s, Got: %s", expectedSignature, actualSignature)
 		return "", errors.New("signature mismatch")
 	}
 
@@ -288,7 +282,16 @@ func (s *PubSubService) processEntry(entry Entry) error {
 	videoID := entry.VideoID
 	
 	if videoID == "" {
-		return fmt.Errorf("failed to extract video ID from entry ID: %s", entry.ID)
+		// Try to extract from entry.ID if VideoID is empty
+		// Example format: yt:video:VIDEO_ID
+		parts := strings.Split(entry.ID, ":")
+		if len(parts) == 3 && parts[0] == "yt" && parts[1] == "video" {
+			videoID = parts[2]
+		}
+		
+		if videoID == "" {
+			return fmt.Errorf("failed to extract video ID from entry")
+		}
 	}
 
 	// Find the channel in the database by YouTube channel ID
@@ -300,38 +303,112 @@ func (s *PubSubService) processEntry(entry Entry) error {
 	// Parse published date
 	publishedAt, err := time.Parse(time.RFC3339, entry.Published)
 	if err != nil {
-		// publishedAt = time.Now()
 		return fmt.Errorf("failed to parse published date: %w", err)
 	}
 
-	// Create a new YouTube video
-	video := &models.YouTubeVideo{
-		YoutubeID:    videoID,
-		ChannelID:    channel.ID,
-		Title:        entry.Title,
-		PublishedAt:  publishedAt,
-		ThumbnailURL: s.generateThumbnailURL(videoID),
+	// Get video details from YouTube API
+	var videoDetails *VideoDetails
+	if s.youtubeService != nil {
+		videoDetails, err = s.youtubeService.GetVideoDetails(videoID)
+		if err != nil {
+			// Log error but continue with basic info
+			log.Printf("Warning: Failed to fetch video details from YouTube API: %v", err)
+		}
+	}
+	
+	// Use available info or fallback to basic info
+	if videoDetails == nil {
+		videoDetails = &VideoDetails{
+			ID:        videoID,
+			Title:     entry.Title,
+			Thumbnail: s.generateThumbnailURL(videoID),
+		}
 	}
 
-	// Create or update video using the video service
-	if err := s.videoService.CreateVideo(video); err != nil {
-		return fmt.Errorf("failed to save video: %w", err)
+	// Start a transaction for video creation and watchlist association
+	tx := s.db.Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("failed to start transaction: %w", tx.Error)
+	}
+	
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Create a new YouTube video
+	video := &models.Video{
+		YoutubeID:    videoID,
+		ChannelID:    channel.ID,
+		Title:        videoDetails.Title,
+		Description:  videoDetails.Description,
+		ThumbnailURL: videoDetails.Thumbnail,
+		Duration:     videoDetails.Duration,
+		PublishedAt:  publishedAt,
+	}
+
+	// Create or update video 
+	var existingVideo models.Video
+	if err := tx.Where("youtube_id = ?", videoID).First(&existingVideo).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			tx.Rollback()
+			return fmt.Errorf("database error: %w", err)
+		}
+		
+		// Create new video
+		if err := tx.Create(video).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to save video: %w", err)
+		}
+	} else {
+		// Update existing video
+		existingVideo.Title = videoDetails.Title
+		existingVideo.Description = videoDetails.Description
+		existingVideo.ThumbnailURL = videoDetails.Thumbnail
+		existingVideo.Duration = videoDetails.Duration
+		if !publishedAt.IsZero() {
+			existingVideo.PublishedAt = publishedAt
+		}
+		
+		if err := tx.Save(&existingVideo).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to update video: %w", err)
+		}
+		
+		// Use the existing video for watchlist associations
+		video = &existingVideo
 	}
 
 	// Find all watchlists that contain this channel
 	var watchlists []models.Watchlist
-	if err := s.db.Joins("JOIN watchlist_channels ON watchlist_channels.watchlist_id = watchlists.id").
+	if err := tx.Joins("JOIN watchlist_channels ON watchlist_channels.watchlist_id = watchlists.id").
 		Where("watchlist_channels.channel_id = ?", channel.ID).
 		Find(&watchlists).Error; err != nil {
+		tx.Rollback()
 		return fmt.Errorf("failed to find watchlists: %w", err)
 	}
 
 	// Add video to each watchlist
 	for _, watchlist := range watchlists {
-		if err := s.db.Model(&watchlist).Association("Videos").Append(video); err != nil {
-			log.Printf("Error adding video to watchlist %d: %v", watchlist.ID, err)
-		} 
+		// Check if video is already in watchlist
+		var count int64
+		if err := tx.Model(&models.Watchlist{}).
+			Joins("JOIN watchlist_videos ON watchlist_videos.watchlist_id = watchlists.id").
+			Where("watchlists.id = ? AND watchlist_videos.video_id = ?", watchlist.ID, video.ID).
+			Count(&count).Error; err != nil {
+			log.Printf("Warning: Error checking if video exists in watchlist: %v", err)
+			continue
+		}
+		
+		if count == 0 {
+			if err := tx.Exec("INSERT INTO watchlist_videos (watchlist_id, video_id) VALUES (?, ?)", 
+				watchlist.ID, video.ID).Error; err != nil {
+				log.Printf("Error adding video to watchlist %d: %v", watchlist.ID, err)
+				continue
+			}
+		}
 	}
 
-	return nil
+	return tx.Commit().Error
 } 

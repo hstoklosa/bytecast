@@ -298,3 +298,16 @@ func (m *MockYouTubeService) GetChannelInfo(channelID string) (*services.Channel
 		Thumbnail:   "https://example.com/thumbnail.jpg",
 	}, nil
 }
+
+// MockPubSubService is a mock implementation of the PubSub service for testing
+type MockPubSubService struct{}
+
+// SubscribeToChannel is a mock implementation
+func (m *MockPubSubService) SubscribeToChannel(channelID string) error {
+	return nil
+}
+
+// UnsubscribeFromChannel is a mock implementation
+func (m *MockPubSubService) UnsubscribeFromChannel(channelID string) error {
+	return nil
+}
